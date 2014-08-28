@@ -69,7 +69,7 @@
 
 #define APPNAME _T("PHD2 Guiding")
 #define PHDVERSION _T("2.3.0")
-#define PHDSUBVER _T("h")
+#define PHDSUBVER _T("a")
 #define FULLVER PHDVERSION PHDSUBVER
 
 #if defined (__WINDOWS__)
@@ -140,7 +140,6 @@ WX_DEFINE_ARRAY_DOUBLE(double, ArrayOfDbl);
 #include "circbuf.h"
 #include "guidinglog.h"
 #include "graph.h"
-#include "statswindow.h"
 #include "star_profile.h"
 #include "target.h"
 #include "graph-stepguider.h"

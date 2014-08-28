@@ -190,13 +190,13 @@ void MyFrame::HandleSockServerInput(wxSocketBase *sock)
             case MSG_PAUSE:
             case 'p':
                 Debug.AddLine("processing socket request PAUSE");
-                SetPaused(PAUSE_GUIDING);
+                SetPaused(true);
                 break;
 
             case MSG_RESUME:
             case 'r':
                 Debug.AddLine("processing socket request RESUME");
-                SetPaused(PAUSE_NONE);
+                SetPaused(false);
                 break;
 
             case MSG_MOVE1:  // +/- 0.5
@@ -292,14 +292,14 @@ void MyFrame::HandleSockServerInput(wxSocketBase *sock)
             case MSG_FLIPRACAL:
             {
                 Debug.AddLine("processing socket request FLIPRACAL");
-                PauseType prev = pGuider->SetPaused(PAUSE_GUIDING);
+                bool wasPaused = pGuider->SetPaused(true);
                 // return 1 for success, 0 for failure
                 rval = 1;
                 if (FlipRACal())
                 {
                     rval = 0;
                 }
-                pGuider->SetPaused(prev);
+                pGuider->SetPaused(wasPaused);
                 GuideLog.ServerCommand(pGuider, "FLIP RA CAL");
                 break;
             }

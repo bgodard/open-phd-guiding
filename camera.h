@@ -74,8 +74,8 @@ protected:
 
     virtual int GetCameraGain(void);
     virtual bool SetCameraGain(int cameraGain);
-    virtual double GetCameraPixelSize(void);
-    virtual bool SetCameraPixelSize(double pixel_size);
+    virtual float GetCameraPixelSize(void);
+    virtual bool SetCameraPixelSize(float pixel_size);
 
     friend class CameraConfigDialogPane;
 

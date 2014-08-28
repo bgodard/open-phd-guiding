@@ -157,7 +157,6 @@ static bool start_capturing(void)
         return false;
     }
 
-    pFrame->pGuider->Reset(true); // invalidate current position, etc.
     pFrame->pGuider->ForceFullFrame(); // we need a full frame to auto-select a star
     pFrame->ResetAutoExposure();
     pFrame->StartCapturing();
@@ -197,9 +196,7 @@ void PhdController::UpdateControllerState(void)
             }
             else if (pFrame->pGuider->IsCalibratingOrGuiding())
             {
-                GUIDER_STATE state = pFrame->pGuider->GetState();
-                Debug.AddLine("PhdController: guider state = %d", state);
-                if (state == STATE_CALIBRATED || state == STATE_GUIDING)
+                if (pFrame->pGuider->GetState() == STATE_GUIDING)
                 {
                     SETSTATE(STATE_SETTLE_BEGIN);
                 }

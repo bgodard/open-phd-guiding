@@ -63,7 +63,7 @@ public:
     void NotifyLooping(unsigned int exposure);
     void NotifyLoopingStopped();
     void NotifyStarSelected(const PHD_Point& pos);
-    void NotifyStarLost(const FrameDroppedInfo& info);
+    void NotifyStarLost();
     void NotifyStartGuiding();
     void NotifyGuidingStopped();
     void NotifyPaused();

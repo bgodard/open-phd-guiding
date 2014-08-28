@@ -50,7 +50,7 @@ Guider::Guider(wxWindow *parent, int xSize, int ySize) :
     m_state = STATE_UNINITIALIZED;
     m_scaleFactor = 1.0;
     m_displayedImage = new wxImage(XWinSize,YWinSize,true);
-    m_paused = PAUSE_NONE;
+    m_paused = false;
     m_starFoundTimestamp = 0;
     m_avgDistanceNeedReset = false;
     m_lockPosShift.shiftEnabled = false;
@@ -83,12 +83,18 @@ void Guider::LoadProfileSettings(void)
     SetScaleImage(scaleImage);
 }
 
-PauseType Guider::SetPaused(PauseType pause)
+bool Guider::IsPaused()
 {
-    Debug.AddLine("Guider::SetPaused(%d)", pause);
-    PauseType prev = m_paused;
-    m_paused = pause;
-    return prev;
+    return m_paused;
+}
+
+bool Guider::SetPaused(bool state)
+{
+    bool bReturn = m_paused;
+
+    m_paused = state;
+
+    return bReturn;
 }
 
 void Guider::ForceFullFrame(void)
@@ -656,11 +662,10 @@ void Guider::SetState(GUIDER_STATE newState)
                         GuideLog.StartCalibration(pMount);
                         EvtServer.NotifyStartCalibration(pMount);
                     }
-                    break;
                 }
-                // fall through
+                break;
             case STATE_CALIBRATING_SECONDARY:
-                if (!pSecondaryMount || !pSecondaryMount->IsConnected())
+                if (!pSecondaryMount)
                 {
                     newState = STATE_CALIBRATED;
                 }
@@ -803,7 +808,6 @@ void Guider::StopGuiding(void)
             break;
         case STATE_GUIDING:
             EvtServer.NotifyGuidingStopped();
-            GuideLog.StopGuiding();
             break;
         case STATE_STOP:
             break;
@@ -869,13 +873,8 @@ void Guider::UpdateGuideState(usImage *pImage, bool bStopping)
             throw THROW_INFO("Skipping frame - guider is paused");
         }
 
-        FrameDroppedInfo info;
-
-        if (UpdateCurrentPosition(pImage, &info))
+        if (UpdateCurrentPosition(pImage, statusMessage))
         {
-            info.frameNumber = pFrame->m_frameCounter;
-            info.time = pFrame->TimeSinceGuidingStarted();
-
             switch (m_state)
             {
                 case STATE_UNINITIALIZED:
@@ -885,20 +884,17 @@ void Guider::UpdateGuideState(usImage *pImage, bool bStopping)
                 case STATE_SELECTED:
                     // we had a current position and lost it
                     SetState(STATE_UNINITIALIZED);
-                    EvtServer.NotifyStarLost(info);
+                    EvtServer.NotifyStarLost();
                     break;
                 case STATE_CALIBRATING_PRIMARY:
                 case STATE_CALIBRATING_SECONDARY:
                     Debug.AddLine("Star lost during calibration... blundering on");
-                    EvtServer.NotifyStarLost(info);
+                    EvtServer.NotifyStarLost();
                     pFrame->SetStatusText(_("star lost"), 1);
                     break;
                 case STATE_GUIDING:
                 {
-                    GuideLog.FrameDropped(info);
-                    EvtServer.NotifyStarLost(info);
-                    pFrame->pGraphLog->AppendData(info);
-
+                    EvtServer.NotifyStarLost();
                     wxColor prevColor = GetBackgroundColour();
                     SetBackgroundColour(wxColour(64,0,0));
                     ClearBackground();
@@ -913,10 +909,9 @@ void Guider::UpdateGuideState(usImage *pImage, bool bStopping)
                     break;
             }
 
-            statusMessage = _("star lost");
+            statusMessage = "star lost";
             throw THROW_INFO("unable to update current position");
         }
-        statusMessage = info.status;
 
         // we have a star selected, so re-enable subframes
         if (m_forceFullFrame)
@@ -958,7 +953,7 @@ void Guider::UpdateGuideState(usImage *pImage, bool bStopping)
                     if (pMount->UpdateCalibrationState(CurrentPosition()))
                     {
                         SetState(STATE_UNINITIALIZED);
-                        statusMessage = _("calibration failed (primary)");
+                        statusMessage = "calibration failed (primary)";
                         throw ERROR_INFO("Calibration failed");
                     }
 
@@ -984,14 +979,14 @@ void Guider::UpdateGuideState(usImage *pImage, bool bStopping)
 
                 // Fall through
             case STATE_CALIBRATING_SECONDARY:
-                if (pSecondaryMount && pSecondaryMount->IsConnected())
+                if (pSecondaryMount)
                 {
                     if (!pSecondaryMount->IsCalibrated())
                     {
                         if (pSecondaryMount->UpdateCalibrationState(CurrentPosition()))
                         {
                             SetState(STATE_UNINITIALIZED);
-                            statusMessage = _("calibration failed (secondary)");
+                            statusMessage = "calibration failed (secondary)";
                             throw ERROR_INFO("Calibration failed");
                         }
                     }
@@ -1001,7 +996,7 @@ void Guider::UpdateGuideState(usImage *pImage, bool bStopping)
                         break;
                     }
                 }
-                assert(!pSecondaryMount || !pSecondaryMount->IsConnected() || pSecondaryMount->IsCalibrated());
+                assert(!pSecondaryMount || pSecondaryMount->IsCalibrated());
 
                 // camera angle is now known, so ok to calculate shift rate camera coords
                 UpdateLockPosShiftCameraCoords();

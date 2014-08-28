@@ -94,13 +94,11 @@ PhdApp::PhdApp(void)
 #endif // __LINUX__
 };
 
-bool PhdApp::OnInit()
-{
+bool PhdApp::OnInit() {
     if (!wxApp::OnInit())
     {
         return false;
     }
-
 #ifndef DEBUG
     #if (wxMAJOR_VERSION > 2 || wxMINOR_VERSION > 8)
     wxDisableAsserts();
@@ -150,11 +148,6 @@ bool PhdApp::OnInit()
     pFrame = new MyFrame(m_instanceNumber, &m_locale);
 
     pFrame->Show(true);
-
-    if (pConfig->IsNewInstance())
-    {
-        pFrame->pGearDialog->ShowProfileWizard();
-    }
 
     return true;
 }

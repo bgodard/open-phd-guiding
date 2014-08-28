@@ -40,7 +40,7 @@
 
 #include "point.h"
 
-class Star : public PHD_Point
+class Star:public PHD_Point
 {
 public:
     enum FindResult
@@ -67,7 +67,7 @@ public:
      */
     bool Find(usImage *pImg, int searchRegion);
     bool Find(usImage *pImg, int searchRegion, int X, int Y);
-    bool AutoFind(usImage *pImg, int edgeAllowance);
+    bool AutoFind(usImage *pImg);
 
     bool WasFound(FindResult result);
     bool WasFound(void);

@@ -33,7 +33,6 @@
  */
 
 #include "phd.h"
-#include "profile_wizard.h"
 
 BEGIN_EVENT_TABLE(GearDialog, wxDialog)
     EVT_CHOICE(GEAR_PROFILES, GearDialog::OnProfileChoice)
@@ -44,7 +43,6 @@ BEGIN_EVENT_TABLE(GearDialog, wxDialog)
     EVT_MENU(GEAR_PROFILE_LOAD, GearDialog::OnProfileLoad)
     EVT_MENU(GEAR_PROFILE_SAVE, GearDialog::OnProfileSave)
     EVT_MENU(BUTTON_ADVANCED, GearDialog::OnAdvanced)
-    EVT_MENU(GEAR_PROFILE_WIZARD, GearDialog::OnButtonWizard)
 
     EVT_BUTTON(GEAR_BUTTON_CONNECT_ALL, GearDialog::OnButtonConnectAll)
     EVT_BUTTON(GEAR_BUTTON_DISCONNECT_ALL, GearDialog::OnButtonDisconnectAll)
@@ -114,8 +112,7 @@ GearDialog::GearDialog(wxWindow *pParent) :
     wxDialog(pParent, wxID_ANY, _("Connect Equipment"), wxDefaultPosition, wxDefaultSize, wxCAPTION | wxCLOSE_BOX),
     m_cameraUpdated(false),
     m_mountUpdated(false),
-    m_stepGuiderUpdated(false),
-    m_showDarksDialog(false)
+    m_stepGuiderUpdated(false)
 {
     m_pCamera              = NULL;
     m_pScope               = NULL;
@@ -192,7 +189,6 @@ void GearDialog::Initialize(void)
 
     m_menuProfileManage = new wxMenu();
     m_menuProfileManage->Append(GEAR_PROFILE_NEW, _("New"), _("Create a new profile, optionally copying from another profile"));
-    m_menuProfileManage->Append(GEAR_PROFILE_WIZARD, _("New using Wizard..."), _("Run the first-light wizard to create a new profile"));
     m_menuProfileManage->Append(GEAR_PROFILE_DELETE, _("Delete"), _("Delete the selected profile"));
     m_menuProfileManage->Append(GEAR_PROFILE_RENAME, _("Rename"), _("Rename the selected profile"));
     m_menuProfileManage->Append(GEAR_PROFILE_LOAD, _("Import..."), _("Load a profile from a file"));
@@ -222,7 +218,7 @@ void GearDialog::Initialize(void)
     pTopLevelSizer->Add(pGearSizer, sizerFlags);
 
     // Camera
-    pGearSizer->Add(new wxStaticText(this, wxID_ANY, _("Camera"), wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT), sizerLabelFlags);
+    pGearSizer->Add(new wxStaticText(this, wxID_ANY, _("Camera"), wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT|wxALIGN_CENTER_VERTICAL), sizerLabelFlags);
     m_pCameras = new wxChoice(this, GEAR_CHOICE_CAMERA, wxDefaultPosition, wxDefaultSize,
                               GuideCamera::List(), 0, wxDefaultValidator, _("Camera"));
     pGearSizer->Add(m_pCameras, sizerButtonFlags);
@@ -254,9 +250,9 @@ void GearDialog::Initialize(void)
 
 #if defined(GUIDE_ASCOM) || defined(GUIDE_INDI)
 #ifdef GUIDE_ASCOM
-    wxString driverName = _T("ASCOM");
+    wxString driverName = _("ASCOM");
 # else
-    wxString driverName = _T("INDI");
+    wxString driverName = _("INDI");
 #endif
     m_pAuxScopes->SetToolTip(wxString::Format(_("If you are using a guide port (On-camera or GPXXX) interface  for guiding, you can also use an 'aux' connection to your %s-compatible mount. This will "
         "be used to make automatic calibration adjustments based on declination and side-of-pier.  If you have already selected an %s driver for your 'mount', the 'aux' mount "
@@ -328,7 +324,7 @@ void GearDialog::LoadGearChoices(void)
     OnChoiceStepGuider(dummyEvent);
 }
 
-int GearDialog::ShowGearDialog(bool autoConnect)
+int GearDialog::ShowModal(bool autoConnect)
 {
     int ret = wxID_OK;
     int callSuper = true;
@@ -416,16 +412,6 @@ void GearDialog::EndModal(int retCode)
     wxDialog::EndModal(retCode);
 
     UpdateAdvancedDialog();
-
-    if (m_showDarksDialog)
-    {
-        m_showDarksDialog = false;
-        if (pCamera && pCamera->Connected)
-        {
-            wxCommandEvent dummy;
-            pFrame->OnDark(dummy);
-        }
-    }
 }
 
 void GearDialog::UpdateCameraButtonState(void)
@@ -716,7 +702,7 @@ void GearDialog::OnChoiceCamera(wxCommandEvent& event)
 
         if (!m_pCamera)
         {
-            throw THROW_INFO("OnChoiceCamera: m_pCamera == NULL");
+            throw THROW_INFO("OnChoiceCamera: m_pScope == NULL");
         }
     }
     catch (wxString Msg)
@@ -930,6 +916,7 @@ void GearDialog::OnChoiceAuxScope(wxCommandEvent& event)
     }
 
     UpdateButtonState();
+
 }
 
 void GearDialog::OnButtonSetupScope(wxCommandEvent& event)
@@ -1191,45 +1178,6 @@ void GearDialog::OnButtonProfileManage(wxCommandEvent& event)
               m_btnProfileManage->GetPosition().y + m_btnProfileManage->GetSize().GetHeight());
 }
 
-void GearDialog::OnButtonWizard(wxCommandEvent& event)
-{
-    ProfileWizard wiz(this, event.GetId() == 0);            // Event id of 0 comes from "first light" launch; show first light UI panel only then
-
-    if (wiz.ShowModal() == wxOK)
-    {
-        // a new profile was created and set as the current profile
-
-        wxArrayString profiles = pConfig->ProfileNames();
-        m_profiles->Set(profiles);
-        m_profiles->SetStringSelection(pConfig->GetCurrentProfile());
-        Layout();
-
-        wxCommandEvent dummy;
-        OnProfileChoice(dummy);
-
-        if (wiz.m_launchDarks)
-        {
-            m_showDarksDialog = true;
-            // if wizard was launched from dialog and darks are requested, connect-all and close dialog
-            if (IsVisible())
-            {
-                wxCommandEvent dummyEvent;
-                OnButtonConnectAll(dummyEvent);
-            }
-        }
-    }
-}
-
-void GearDialog::ShowProfileWizard(void)
-{
-    wxCommandEvent dummy;
-    OnButtonWizard(dummy);
-    if (m_showDarksDialog)
-    {
-        ShowGearDialog(true); // connect equipment and launch darks dialog
-    }
-}
-
 void GearDialog::OnProfileChoice(wxCommandEvent& event)
 {
     wxString selection = m_profiles->GetStringSelection();
@@ -1422,7 +1370,7 @@ void GearDialog::OnProfileNew(wxCommandEvent& event)
 
     if (pConfig->GetProfileId(newname) > 0)
     {
-        wxMessageBox(wxString::Format(_("Cannot create profile %s, there is already a profile with that name"), newname), _("Error"));
+        wxMessageBox(_(wxString::Format("Cannot create profile %s, there is already a profile with that name", newname)), _("Error"));
         return;
     }
 

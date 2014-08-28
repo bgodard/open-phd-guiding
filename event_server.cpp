@@ -710,29 +710,7 @@ static void set_paused(JObj& response, const json_value *params)
     }
     val = p->int_value ? true : false;
 
-    PauseType pause = PAUSE_NONE;
-
-    if (val)
-    {
-        pause = PAUSE_GUIDING;
-
-        p = at(params, 1);
-        if (p)
-        {
-            if (p->type == JSON_STRING)
-            {
-                if (strcmp(p->string_value, "full") == 0)
-                    pause = PAUSE_FULL;
-            }
-            else
-            {
-                response << jrpc_error(JSONRPC_INVALID_PARAMS, "expected string param at index 1");
-                return;
-            }
-        }
-    }
-
-    pFrame->SetPaused(pause);
+    pFrame->SetPaused(val);
 
     response << jrpc_result(0);
 }
@@ -1468,25 +1446,9 @@ void EventServer::NotifyStarSelected(const PHD_Point& pt)
     SIMPLE_NOTIFY_EV(ev_star_selected(pt));
 }
 
-void EventServer::NotifyStarLost(const FrameDroppedInfo& info)
+void EventServer::NotifyStarLost()
 {
-    if (m_eventServerClients.empty())
-        return;
-
-    Ev ev("StarLost");
-
-    ev << NV("Frame", info.frameNumber)
-       << NV("Time", info.time, 3)
-       << NV("StarMass", info.starMass, 0)
-       << NV("SNR", info.starSNR, 2);
-
-    if (info.starError)
-        ev << NV("ErrorCode", info.starError);
-
-    if (!info.status.IsEmpty())
-        ev << NV("Status", info.status);
-
-    do_notify(m_eventServerClients, ev);
+    SIMPLE_NOTIFY("StarLost");
 }
 
 void EventServer::NotifyStartGuiding()
@@ -1516,7 +1478,7 @@ void EventServer::NotifyGuideStep(const GuideStepInfo& step)
 
     Ev ev("GuideStep");
 
-    ev << NV("Frame", step.frameNumber)
+    ev << NV("Frame", (int) pFrame->m_frameCounter)
        << NV("Time", step.time, 3)
        << NVMount(step.mount)
        << NV("dx", step.cameraOffset->X, 3)
@@ -1546,8 +1508,9 @@ void EventServer::NotifyGuideStep(const GuideStepInfo& step)
     ev << NV("StarMass", step.starMass, 0)
        << NV("SNR", step.starSNR, 2);
 
-    if (step.starError)
-       ev << NV("ErrorCode", step.starError);
+    int errorCode = pFrame->pGuider->StarError();
+    if (errorCode)
+       ev << NV("ErrorCode", errorCode);
 
     do_notify(m_eventServerClients, ev);
 }

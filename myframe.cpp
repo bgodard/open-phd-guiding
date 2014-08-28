@@ -110,7 +110,6 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(MENU_DEBUG,MyFrame::OnLog)
     EVT_MENU(MENU_TOOLBAR,MyFrame::OnToolBar)
     EVT_MENU(MENU_GRAPH, MyFrame::OnGraph)
-    EVT_MENU(MENU_STATS, MyFrame::OnStats)
     EVT_MENU(MENU_AO_GRAPH, MyFrame::OnAoGraph)
     EVT_MENU(MENU_TARGET, MyFrame::OnTarget)
     EVT_MENU(MENU_SERVER, MyFrame::OnServerMenu)
@@ -149,8 +148,7 @@ END_EVENT_TABLE()
 // ---------------------- Main Frame -------------------------------------
 // frame constructor
 MyFrame::MyFrame(int instanceNumber, wxLocale *locale)
-    : wxFrame(NULL, wxID_ANY, wxEmptyString),
-    pStatsWin(0)
+    : wxFrame(NULL, wxID_ANY, wxEmptyString)
 {
     m_instanceNumber = instanceNumber;
     m_pLocale = locale;
@@ -204,11 +202,6 @@ MyFrame::MyFrame(int instanceNumber, wxLocale *locale)
     wxSizer *sizer = new wxBoxSizer(wxVERTICAL);
 
     m_infoBar = new wxInfoBar(guiderWin);
-    m_infoBar->Connect(BUTTON_ALERT_ACTION, wxEVT_BUTTON,
-        wxCommandEventHandler(MyFrame::OnAlertButton), NULL, this);
-    m_infoBar->Connect(BUTTON_ALERT_CLOSE, wxEVT_BUTTON,
-        wxCommandEventHandler(MyFrame::OnAlertButton), NULL, this);
-
     sizer->Add(m_infoBar, wxSizerFlags().Expand());
 
     pGuider = new GuiderOneStar(guiderWin);
@@ -266,11 +259,6 @@ MyFrame::MyFrame(int instanceNumber, wxLocale *locale)
         Name(_T("GraphLog")).Caption(_("History")).
         Hide());
 
-    pStatsWin = new StatsWindow(this);
-    m_mgr.AddPane(pStatsWin, wxAuiPaneInfo().
-        Name(_T("Stats")).Caption(_("Guide Stats")).
-        Hide());
-
     pStepGuiderGraph = new GraphStepguiderWindow(this);
     m_mgr.AddPane(pStepGuiderGraph, wxAuiPaneInfo().
         Name(_T("AOPosition")).Caption(_("AO Position")).
@@ -320,7 +308,6 @@ MyFrame::MyFrame(int instanceNumber, wxLocale *locale)
 
     m_continueCapturing = false;
     CaptureActive     = false;
-    m_exposurePending = false;
 
     m_mgr.GetArtProvider()->SetMetric(wxAUI_DOCKART_GRADIENT_TYPE, wxAUI_GRADIENT_VERTICAL);
     m_mgr.GetArtProvider()->SetColor(wxAUI_DOCKART_INACTIVE_CAPTION_COLOUR, wxColour(0, 153, 255));
@@ -334,7 +321,6 @@ MyFrame::MyFrame(int instanceNumber, wxLocale *locale)
         m_mgr.GetPane(_T("MainToolBar")).Caption(_T("Main tool bar"));
         m_mgr.GetPane(_T("Guider")).Caption(_T("Guider"));
         m_mgr.GetPane(_T("GraphLog")).Caption(_("History"));
-        m_mgr.GetPane(_T("Stats")).Caption(_("Guide Stats"));
         m_mgr.GetPane(_T("AOPosition")).Caption(_("AO Position"));
         m_mgr.GetPane(_T("Profile")).Caption(_("Star Profile"));
         m_mgr.GetPane(_T("Target")).Caption(_("Target"));
@@ -349,10 +335,6 @@ MyFrame::MyFrame(int instanceNumber, wxLocale *locale)
     panel_state = m_mgr.GetPane(_T("GraphLog")).IsShown();
     pGraphLog->SetState(panel_state);
     Menubar->Check(MENU_GRAPH, panel_state);
-
-    panel_state = m_mgr.GetPane(_T("Stats")).IsShown();
-    pStatsWin->SetState(panel_state);
-    Menubar->Check(MENU_STATS, panel_state);
 
     panel_state = m_mgr.GetPane(_T("AOPosition")).IsShown();
     pStepGuiderGraph->SetState(panel_state);
@@ -419,14 +401,14 @@ void MyFrame::SetupMenuBar(void)
 {
     wxMenu *file_menu = new wxMenu;
     file_menu->AppendSeparator();
-    file_menu->Append(wxID_SAVE, _("Save Image..."), _("Save current image"));
+    file_menu->Append(wxID_SAVE, _("Save Image"), _("Save current image"));
     file_menu->Append(wxID_EXIT, _("E&xit\tAlt-X"), _("Quit this program"));
 
     tools_menu = new wxMenu;
     tools_menu->Append(MENU_MANGUIDE, _("&Manual Guide"), _("Manual / test guide dialog"));
     tools_menu->Append(MENU_AUTOSTAR, _("Auto-select &Star\tAlt-S"), _("Automatically select star"));
-    tools_menu->Append(EEGG_RESTORECAL, _("Restore Calibration Data..."), _("Restore calibration data from last successful calibration"));
-    tools_menu->Append(EEGG_MANUALCAL, _("Enter Calibration Data..."), _("Manually calibrate"));
+    tools_menu->Append(EEGG_RESTORECAL, _("Restore Calibration Data"), _("Restore calibration data from last successful calibration"));
+    tools_menu->Append(EEGG_MANUALCAL, _("Enter Calibration Data"), _("Manually calibrate"));
     tools_menu->Append(EEGG_FLIPRACAL, _("Flip Calibration Data"), _("Flip RA calibration vector"));
     tools_menu->Append(EEGG_MANUALLOCK, _("Adjust Lock Position"), _("Adjust the lock position"));
     tools_menu->Append(MENU_DRIFTTOOL,_("Drift Align"), _("Run the Drift Alignment tool"));
@@ -440,8 +422,7 @@ void MyFrame::SetupMenuBar(void)
     view_menu = new wxMenu();
     view_menu->AppendCheckItem(MENU_TOOLBAR,_("Display Toolbar"),_("Enable / disable tool bar"));
     view_menu->AppendCheckItem(MENU_GRAPH,_("Display Graph"),_("Enable / disable graph"));
-    view_menu->AppendCheckItem(MENU_STATS, _("Display Stats"), _("Enable / disable guide stats"));
-    view_menu->AppendCheckItem(MENU_AO_GRAPH, _("Display AO Graph"), _("Enable / disable AO graph"));
+    view_menu->AppendCheckItem(MENU_AO_GRAPH,_("Display AO Graph"),_("Enable / disable AO graph"));
     view_menu->AppendCheckItem(MENU_TARGET,_("Display Target"),_("Enable / disable target"));
     view_menu->AppendCheckItem(MENU_STARPROFILE,_("Display Star Profile"),_("Enable / disable star profile view"));
     view_menu->AppendSeparator();
@@ -536,16 +517,16 @@ void MyFrame::SetComboBoxWidth(wxComboBox *pComboBox, unsigned int extra)
 
 static wxString dur_choices[] = {
     _T("Auto-placeholder"), // translated value provided later, cannot use _() in static initializer
-    _T("0.01 s"), _T("0.02 s"), _T("0.05 s"),
-    _T("0.1 s"), _T("0.2 s"), _T("0.5 s"), _T("1.0 s"), _T("1.5 s"),
+    _T("0.001 s"), _T("0.002 s"), _T("0.005 s"), _T("0.01 s"),
+    _T("0.05 s"), _T("0.1 s"), _T("0.2 s"), _T("0.5 s"), _T("1.0 s"), _T("1.5 s"),
     _T("2.0 s"), _T("2.5 s"), _T("3.0 s"), _T("3.5 s"), _T("4.0 s"), _T("4.5 s"), _T("5.0 s"),
     _T("6.0 s"), _T("7.0 s"), _T("8.0 s"), _T("9.0 s"),_T("10 s"), _T("15.0 s")
 };
-static const int DefaultDurChoiceIdx = 7; // 1.0s
+static const int DefaultDurChoiceIdx = 9;
 static int dur_values[] = {
     -1,
-    10, 20, 50,
-    100, 200, 500, 1000, 1500,
+    1, 2, 5, 10,
+    50, 100, 200, 500, 1000, 1500,
     2000, 2500, 3000, 3500, 4000, 4500, 5000,
     6000, 7000, 8000, 9000, 10000, 15000,
 };
@@ -602,14 +583,6 @@ void MyFrame::SetAutoExposureCfg(int minExp, int maxExp, double targetSNR)
     m_autoExp.minExposure = minExp;
     m_autoExp.maxExposure = maxExp;
     m_autoExp.targetSNR = targetSNR;
-}
-
-wxString MyFrame::ExposureDurationSummary(void) const
-{
-    if (m_autoExp.enabled)
-        return wxString::Format("Auto (min = %d ms, max = %d ms, SNR = %.2f)", m_autoExp.minExposure, m_autoExp.maxExposure, m_autoExp.targetSNR);
-    else
-        return wxString::Format("%d ms", m_exposureDuration);
 }
 
 void MyFrame::ResetAutoExposure(void)
@@ -723,18 +696,27 @@ void MyFrame::SetupToolBar()
 {
     MainToolbar = new wxAuiToolBar(this, -1, wxDefaultPosition, wxDefaultSize, wxAUI_TB_DEFAULT_STYLE);
 
-    wxBitmap camera_bmp, loop_bmp, guide_bmp, stop_bmp;
+    wxBitmap camera_bmp, scope_bmp, ao_bmp, loop_bmp, cal_bmp, guide_bmp, stop_bmp;
 #if defined (WINICONS)
     camera_bmp.CopyFromIcon(wxIcon(_T("camera_icon")));
+    scope_bmp.CopyFromIcon(wxIcon(_T("scope_icon")));
     loop_bmp.CopyFromIcon(wxIcon(_T("loop_icon")));
+    cal_bmp.CopyFromIcon(wxIcon(_T("cal_icon")));
     guide_bmp.CopyFromIcon(wxIcon(_T("phd_icon")));
     stop_bmp.CopyFromIcon(wxIcon(_T("stop_icon")));
 #else
     #include "icons/sm_PHD.xpm"  // defines phd_icon[]
     #include "icons/stop1.xpm" // defines stop_icon[]
+    #include "icons/scope1.xpm" // defines scope_icon[]
+    #include "icons/ao.xpm" // defines ao_icon[]
+    #include "icons/measure.xpm" // defines_cal_icon[]
     #include "icons/loop3.xpm" // defines loop_icon
     #include "icons/cam2.xpm"  // cam_icon
+    #include "icons/brain1.xpm" // brain_icon[]
+    scope_bmp = wxBitmap(scope_icon);
+    ao_bmp = wxBitmap(ao_icon);
     loop_bmp = wxBitmap(loop_icon);
+    cal_bmp = wxBitmap(cal_icon);
     guide_bmp = wxBitmap(phd_icon);
     stop_bmp = wxBitmap(stop_icon);
     camera_bmp = wxBitmap(cam_icon);
@@ -755,7 +737,6 @@ void MyFrame::SetupToolBar()
 #if defined (WINICONS)
     brain_bmp.CopyFromIcon(wxIcon(_T("brain_icon")));
 #else
-#   include "icons/brain1.xpm" // brain_icon[]
     brain_bmp = wxBitmap(brain_icon);
 #endif
 
@@ -790,9 +771,6 @@ void MyFrame::UpdateCalibrationStatus(void)
         (pSecondaryMount && pSecondaryMount->DecCompensationActive());
 
     SetStatusText(cal ? deccomp ? _("Cal +") : _("Cal") : _("No cal"), 5);
-
-    if (pStatsWin)
-        pStatsWin->UpdateScopePointing();
 }
 
 void MyFrame::SetupStatusBar(void)
@@ -926,77 +904,30 @@ static wxString WrapText(wxWindow *win, const wxString& text, int width)
     return Wrapper(win, text, width).Str();
 }
 
-struct alert_params
+static void DoAlert(wxInfoBar *infoBar, const wxString& msg, int flags)
 {
-    wxString msg;
-    wxString buttonLabel;
-    int flags;
-    alert_fn *fn;
-    long arg;
-};
-
-void MyFrame::OnAlertButton(wxCommandEvent& evt)
-{
-    if (evt.GetId() == BUTTON_ALERT_ACTION && m_alertFn)
-        (*m_alertFn)(m_alertFnArg);
-    m_infoBar->Dismiss();
-}
-
-void MyFrame::DoAlert(const alert_params& params)
-{
-    Debug.AddLine(wxString::Format("Alert: %s", params.msg));
-    m_alertFn = params.fn;
-    m_alertFnArg = params.arg;
-
-    int buttonSpace = 80;
-    m_infoBar->RemoveButton(BUTTON_ALERT_ACTION);
-    m_infoBar->RemoveButton(BUTTON_ALERT_CLOSE);
-    if (params.fn)
-    {
-        m_infoBar->AddButton(BUTTON_ALERT_ACTION, params.buttonLabel);
-        m_infoBar->AddButton(BUTTON_ALERT_CLOSE, _("Close"));
-        buttonSpace = 280;
-    }
-
-    m_infoBar->ShowMessage(pFrame ? WrapText(m_infoBar, params.msg, wxMax(pFrame->GetSize().GetWidth() - buttonSpace, 100)) : params.msg, params.flags);
-}
-
-void MyFrame::Alert(const wxString& msg, const wxString& buttonLabel, alert_fn *fn, long arg, int flags)
-{
-    if (wxThread::IsMain())
-    {
-        alert_params params;
-        params.msg = msg;
-        params.buttonLabel = buttonLabel;
-        params.flags = flags;
-        params.fn = fn;
-        params.arg = arg;
-        DoAlert(params);
-    }
-    else
-    {
-        alert_params *params = new alert_params;
-        params->msg = msg;
-        params->buttonLabel = buttonLabel;
-        params->flags = flags;
-        params->fn = fn;
-        params->arg = arg;
-        wxThreadEvent *event = new wxThreadEvent(wxEVT_THREAD, ALERT_FROM_THREAD_EVENT);
-        event->SetExtraLong((long) params);
-        wxQueueEvent(this, event);
-    }
+    Debug.AddLine(wxString::Format("Alert: %s", msg));
+    infoBar->ShowMessage(pFrame ? WrapText(infoBar, msg, pFrame->GetSize().GetWidth() - 80) : msg, flags);
 }
 
 void MyFrame::Alert(const wxString& msg, int flags)
 {
-    Alert(msg, wxEmptyString, 0, 0, flags);
+    if (wxThread::IsMain())
+    {
+        DoAlert(m_infoBar, msg, flags);
+    }
+    else
+    {
+        wxThreadEvent *event = new wxThreadEvent(wxEVT_THREAD, ALERT_FROM_THREAD_EVENT);
+        event->SetString(msg);
+        event->SetInt(flags);
+        wxQueueEvent(this, event);
+    }
 }
 
 void MyFrame::OnAlertFromThread(wxThreadEvent& event)
 {
-    alert_params *params = (alert_params *) event.GetExtraLong();
-    DoAlert(*params);
-    delete params;
+    DoAlert(m_infoBar, event.GetString(), event.GetInt());
 }
 
 /*
@@ -1009,7 +940,7 @@ void MyFrame::OnAlertFromThread(wxThreadEvent& event)
  *
  */
 
-void MyFrame::SetStatusText(const wxString& text, int number)
+void MyFrame::SetStatusText(const wxString& text, int number, int msToDisplay)
 {
     Debug.AddLine(wxString::Format("Status Line %d: %s", number, text));
 
@@ -1022,6 +953,7 @@ void MyFrame::SetStatusText(const wxString& text, int number)
         wxThreadEvent *event = new wxThreadEvent(wxEVT_THREAD, SET_STATUS_TEXT_EVENT);
         event->SetString(text);
         event->SetInt(number);
+        event->SetExtraLong(msToDisplay);
         wxQueueEvent(this, event);
     }
 }
@@ -1029,14 +961,15 @@ void MyFrame::SetStatusText(const wxString& text, int number)
 void MyFrame::OnSetStatusText(wxThreadEvent& event)
 {
     int pane = event.GetInt();
+    int duration = event.GetExtraLong();
     wxString msg(event.GetString());
 
     if (pane == 1)
     {
         // display message for 2.5s, or until the next message is displayed
-        const int DISPLAY_MS = 2500;
+        const int MIN_DISPLAY_MS = 2500;
         wxFrame::SetStatusText(msg, pane);
-        m_statusbarTimer.Start(DISPLAY_MS, wxTIMER_ONE_SHOT);
+        m_statusbarTimer.Start(std::max(duration, MIN_DISPLAY_MS), wxTIMER_ONE_SHOT);
     }
     else
     {
@@ -1133,13 +1066,8 @@ void MyFrame::OnStatusbarTimerEvent(wxTimerEvent& evt)
     wxFrame::SetStatusText("", 1);
 }
 
-void MyFrame::ScheduleExposure(int exposureDuration, const wxRect& subframe)
+void MyFrame::ScheduleExposure(int exposureDuration, wxRect subframe)
 {
-    assert(!m_exposurePending);
-    assert(wxThread::IsMain()); // m_exposurePending only updated in main thread
-
-    m_exposurePending = true;
-
     wxCriticalSectionLocker lock(m_CSpWorkerThread);
     Debug.AddLine("ScheduleExposure(%d)", exposureDuration);
 
@@ -1223,20 +1151,18 @@ void MyFrame::StopCapturing(void)
     m_continueCapturing = false;
 }
 
-void MyFrame::SetPaused(PauseType pause)
+void MyFrame::SetPaused(bool pause)
 {
-    if (pause != PAUSE_NONE && !pGuider->IsPaused())
+    if (pause && !pGuider->IsPaused())
     {
-        pGuider->SetPaused(pause);
+        pGuider->SetPaused(true);
         SetStatusText(_("Paused"));
         GuideLog.ServerCommand(pGuider, "PAUSE");
         EvtServer.NotifyPaused();
     }
-    else if (pause == PAUSE_NONE && pGuider->IsPaused())
+    else if (!pause && pGuider->IsPaused())
     {
-        pGuider->SetPaused(PAUSE_NONE);
-        if (!m_exposurePending)
-            ScheduleExposure(RequestedExposureDuration(), pGuider->GetBoundingBox());
+        pGuider->SetPaused(false);
         SetStatusText(_("Resumed"));
         GuideLog.ServerCommand(pGuider, "RESUME");
         EvtServer.NotifyResumed();
@@ -1339,11 +1265,6 @@ bool MyFrame::Dither(double amount, bool raOnly)
         SetStatusText(wxString::Format(_("Dither by %.2f,%.2f"), dRa, dDec));
         GuideLog.NotifyGuidingDithered(pGuider, dRa, dDec);
         EvtServer.NotifyGuidingDithered(dRa, dDec);
-        DitherInfo info;
-        info.timestamp = ::wxGetUTCTimeMillis().GetValue();
-        info.dRa = dRa;
-        info.dDec = dDec;
-        pGraphLog->AppendData(info);
     }
     catch (wxString Msg)
     {
@@ -1845,13 +1766,12 @@ wxString MyFrame::GetDefaultFileDir()
 
     return rslt;
 }
-
 double MyFrame::GetCameraPixelScale(void)
 {
     if (!pCamera || pCamera->PixelSize == 0.0 || m_focalLength == 0)
         return 1.0;
 
-    return GetPixelScale(pCamera->PixelSize, m_focalLength);
+    return 206.265 * pCamera->PixelSize / m_focalLength;
 }
 
 wxString MyFrame::GetSettingsSummary()

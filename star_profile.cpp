@@ -43,12 +43,11 @@ END_EVENT_TABLE()
 ProfileWindow::ProfileWindow(wxWindow *parent) :
     wxWindow(parent,wxID_ANY,wxDefaultPosition,wxDefaultSize, wxFULL_REPAINT_ON_RESIZE,_("Profile"))
 {
-    SetBackgroundStyle(wxBG_STYLE_PAINT);
-
     this->visible = false;
     this->mode = 0; // 2D profile
     this->SetBackgroundStyle(wxBG_STYLE_CUSTOM);
     this->data = new unsigned short[441];  // 21x21 subframe
+
 }
 
 ProfileWindow::~ProfileWindow() {
@@ -101,12 +100,11 @@ void ProfileWindow::UpdateData(usImage *pImg, float xpos, float ypos) {
 
 }
 
-void ProfileWindow::OnPaint(wxPaintEvent& WXUNUSED(evt))
-{
-    wxAutoBufferedPaintDC dc(this);
-
+void ProfileWindow::OnPaint(wxPaintEvent& WXUNUSED(evt)) {
+    wxClientDC dc(this);
     wxPoint Prof[21];
 
+    //dc.SetBackground(* wxBLACK_BRUSH);
     dc.SetBackground(wxColour(10,30,30));
     dc.Clear();
     if (!pFrame || !pFrame->pGuider || pFrame->pGuider->GetState() == STATE_UNINITIALIZED) return;

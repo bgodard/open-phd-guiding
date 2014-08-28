@@ -130,7 +130,7 @@ bool Star::Find(usImage *pImg, int searchRegion, int base_x, int base_y)
 
         unsigned long maxlval = 0;
         unsigned short max = 0, nearmax1 = 0, nearmax2 = 0;
-        unsigned long sum = 0;
+        unsigned long mean = 0;
 
         for (int y = 0; y < searchsize; y++)
         {
@@ -157,9 +157,10 @@ bool Star::Find(usImage *pImg, int searchRegion, int base_x, int base_y)
                     nearmax1 = max;
                     max = sval;
                 }
-                sum += sval;
+                mean += sval;
             }
         }
+        mean /= (searchsize * searchsize);
 
         // should be close now, hone in by finding the weighted average position
 
@@ -202,12 +203,7 @@ bool Star::Find(usImage *pImg, int searchRegion, int base_x, int base_y)
             }
         }
 
-        // SNR = max / mean = max / (sum / area) = max * area / sum
-        if (sum > 0)
-            SNR = (double) max * (double) (searchsize * searchsize) / (double) sum;
-        else
-            SNR = 0.0;
-
+        SNR = (double) max / (double) mean;
         Mass = mass;
 
         if (mass < 10.0) {
@@ -256,15 +252,13 @@ bool Star::Find(usImage *pImg, int searchRegion)
     return Find(pImg, searchRegion, X, Y);
 }
 
-bool Star::AutoFind(usImage *pImg, int extraEdgeAllowance)
+bool Star::AutoFind(usImage *pImg)
 {
     if (!pImg->Subframe.IsEmpty())
     {
         Debug.AddLine("Autofind called on subframe, returning error");
         return false; // not found
     }
-
-    Debug.AddLine(wxString::Format("Star::AutoFind called with edgeAllowance = %d", extraEdgeAllowance));
 
     // OK, do seem to need to run 3x3 median first
     Median3(*pImg);
@@ -292,17 +286,13 @@ bool Star::AutoFind(usImage *pImg, int extraEdgeAllowance)
         8@C2, D2
         48 * D3
         */
-
-    enum { MIN_EDGE_DIST = 40 };
-    int edgeDist = MIN_EDGE_DIST + extraEdgeAllowance;
-
-    for (int y = edgeDist; y < pImg->Size.GetHeight() - edgeDist; y++)
+    for (int y = 40; y < pImg->Size.GetHeight() - 40; y++)
     {
-        for (int x = edgeDist; x < linesize - edgeDist; x++)
+        for (int x = 40; x < linesize - 40; x++)
         {
             float A, B1, B2, C1, C2, C3, D1, D2, D3;
 
-            A = (float) *(pImg->ImageData + linesize * y + x);
+            A = (float)*(pImg->ImageData + linesize * y + x);
             B1 = (float) *(pImg->ImageData + linesize * (y-1) + x) + (float) *(pImg->ImageData + linesize * (y+1) + x) + (float) *(pImg->ImageData + linesize * y + (x + 1)) + (float) *(pImg->ImageData + linesize * y + (x-1));
             B2 = (float) *(pImg->ImageData + linesize * (y-1) + (x-1)) + (float) *(pImg->ImageData + linesize * (y-1) + (x+1)) + (float) *(pImg->ImageData + linesize * (y+1) + (x + 1)) + (float) *(pImg->ImageData + linesize * (y+1) + (x-1));
             C1 = (float) *(pImg->ImageData + linesize * (y-2) + x) + (float) *(pImg->ImageData + linesize * (y+2) + x) + (float) *(pImg->ImageData + linesize * y + (x + 2)) + (float) *(pImg->ImageData + linesize * y + (x-2));
@@ -316,26 +306,26 @@ bool Star::AutoFind(usImage *pImg, int extraEdgeAllowance)
             const unsigned short *uptr = pImg->ImageData + linesize * (y-4) + (x-4);
             int i;
             for (i=0; i<9; i++, uptr++)
-                D3 += *uptr;
+                D3 = D3 + *uptr;
             uptr = pImg->ImageData + linesize * (y-3) + (x-4);
             for (i=0; i<3; i++, uptr++)
-                D3 += *uptr;
-            uptr += 2;
+                D3 = D3 + *uptr;
+            uptr = uptr + 2;
             for (i=0; i<3; i++, uptr++)
-                D3 += *uptr;
-            D3 += (float) *(pImg->ImageData + linesize * (y-2) + (x-4)) + (float) *(pImg->ImageData + linesize * (y-2) + (x+4)) + (float) *(pImg->ImageData + linesize * (y-2) + (x-3)) + (float) *(pImg->ImageData + linesize * (y-2) + (x-3)) +
+                D3 = D3 + *uptr;
+            D3 = D3 + (float) *(pImg->ImageData + linesize * (y-2) + (x-4)) + (float) *(pImg->ImageData + linesize * (y-2) + (x+4)) + (float) *(pImg->ImageData + linesize * (y-2) + (x-3)) + (float) *(pImg->ImageData + linesize * (y-2) + (x-3)) +
                 (float) *(pImg->ImageData + linesize * (y+2) + (x-4)) + (float) *(pImg->ImageData + linesize * (y+2) + (x+4)) + (float) *(pImg->ImageData + linesize * (y+2) + (x - 3)) + (float) *(pImg->ImageData + linesize * (y+2) + (x-3)) +
                 (float) *(pImg->ImageData + linesize * y + (x + 4)) + (float) *(pImg->ImageData + linesize * y + (x-4));
 
             uptr = pImg->ImageData + linesize * (y+4) + (x-4);
             for (i=0; i<9; i++, uptr++)
-                D3 += *uptr;
+                D3 = D3 + *uptr;
             uptr = pImg->ImageData + linesize * (y+3) + (x-4);
             for (i=0; i<3; i++, uptr++)
-                D3 += *uptr;
-            uptr += 2;
+                D3 = D3 + *uptr;
+            uptr = uptr + 2;
             for (i=0; i<3; i++, uptr++)
-                D3 += *uptr;
+                D3 = D3 + *uptr;
 
             double mean = (A+B1+B2+C1+C2+C3+D1+D2+D3)/85.0;
             double PSF_fit = PSF[0] * (A-mean) + PSF[1] * (B1 - 4.0*mean) + PSF[2] * (B2 - 4.0 * mean) +

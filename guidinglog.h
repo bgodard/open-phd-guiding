@@ -45,7 +45,6 @@ struct LockPosShiftParams;
 struct GuideStepInfo
 {
     Mount *mount;
-    int frameNumber;
     double time;
     const PHD_Point *cameraOffset;
     const PHD_Point *mountOffset;
@@ -60,17 +59,6 @@ struct GuideStepInfo
     wxPoint aoPos;
     double starMass;
     double starSNR;
-    int starError;
-};
-
-struct FrameDroppedInfo
-{
-    int frameNumber;
-    double time;
-    double starMass;
-    double starSNR;
-    int starError;
-    wxString status;
 };
 
 class GuidingLog : public Logger
@@ -79,48 +67,40 @@ class GuidingLog : public Logger
     wxFFile m_file;
     wxString m_fileName;
     bool m_keepFile;
-    bool m_isGuiding;
-
-protected:
-    void GuidingHeader(void);
 
 public:
-    GuidingLog(void);
+    GuidingLog(bool active=false);
     ~GuidingLog(void);
 
     bool EnableLogging(void);
     bool EnableLogging(bool enabled);
-    void DisableLogging(void);
-    bool IsEnabled(void) const;
+    bool DisableLogging(void);
+    bool IsEnabled(void);
     bool Flush(void);
     void Close(void);
 
-    void StartCalibration(Mount *pCalibrationMount);
-    void CalibrationFailed(Mount *pCalibrationMount, const wxString& msg);
-    void CalibrationStep(Mount *pCalibrationMount, const wxString& direction, int steps, double dx, double dy, const PHD_Point &xy, double dist);
-    void CalibrationDirectComplete(Mount *pCalibrationMount, const wxString& direction, double angle, double rate);
-    void CalibrationComplete(Mount *pCalibrationMount);
+    bool StartCalibration(Mount *pCalibrationMount);
+    bool CalibrationFailed(Mount *pCalibrationMount, const wxString& msg);
+    bool CalibrationStep(Mount *pCalibrationMount, const wxString& direction, int steps, double dx, double dy, const PHD_Point &xy, double dist);
+    bool CalibrationDirectComplete(Mount *pCalibrationMount, const wxString& direction, double angle, double rate);
+    bool CalibrationComplete(Mount *pCalibrationMount);
 
-    void StartGuiding();
-    void StopGuiding();
-    void GuideStep(const GuideStepInfo& info);
-    void FrameDropped(const FrameDroppedInfo& info);
+    bool StartGuiding();
+    bool GuideStep(const GuideStepInfo& info);
 
-    void ServerCommand(Guider *guider, const wxString& cmd);
-    void NotifyGuidingDithered(Guider *guider, double dx, double dy);
-    void NotifySetLockPosition(Guider *guider);
-    void NotifyLockShiftParams(const LockPosShiftParams& shiftParams, const PHD_Point& cameraRate);
+    bool ServerCommand(Guider *guider, const wxString& cmd);
+    bool NotifyGuidingDithered(Guider *guider, double dx, double dy);
+    bool NotifySetLockPosition(Guider *guider);
+    bool NotifyLockShiftParams(const LockPosShiftParams& shiftParams, const PHD_Point& cameraRate);
 
-    void SetGuidingParam(const wxString& name, double val);
-    void SetGuidingParam(const wxString& name, int val);
-    void SetGuidingParam(const wxString& name, const wxString& val);
+    bool SetGuidingParam(const wxString& name, double val);
+    bool SetGuidingParam(const wxString& name, int val);
+    bool SetGuidingParam(const wxString& name, const wxString& val);
 
     bool ChangeDirLog(const wxString& newdir);
-};
 
-inline bool GuidingLog::IsEnabled(void) const
-{
-    return m_enabled;
-}
+protected:
+    bool GuidingHeader(void);
+};
 
 #endif

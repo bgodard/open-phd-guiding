@@ -35,10 +35,7 @@
 
 class ScopeGCUSBST4 : public Scope
 {
-    int portFID;
-
 public:
-
     ScopeGCUSBST4(void) {
         m_Name = wxString("GCUSB-ST4");
     }
@@ -48,6 +45,11 @@ public:
     virtual bool Disconnect(void);
 
     virtual MOVE_RESULT Guide(GUIDE_DIRECTION direction, int duration);
+
+private:
+    int portFID;
+    kern_return_t createSerialIterator(io_iterator_t *serialIterator);
+    char *getRegistryString(io_object_t sObj, char *propName);
 };
 
 #endif /* GUIDE_GCUSBST4 */

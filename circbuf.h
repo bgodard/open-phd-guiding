@@ -63,8 +63,7 @@ public:
     circular_buffer(unsigned int capacity);
     ~circular_buffer();
     void resize(unsigned int capacity);
-    void push_front(const T& t);
-    void pop_back(unsigned int n = 1);
+    void push_back(const T& t);
     void clear();
     T& operator[](unsigned int n) const;
     unsigned int size() const { return m_size; }
@@ -116,7 +115,7 @@ void circular_buffer<T>::clear()
 }
 
 template<typename T>
-void circular_buffer<T>::push_front(const T& t)
+void circular_buffer<T>::push_back(const T& t)
 {
     m_ary[m_head] = t;
     m_head = (m_head + 1) % m_capacity;
@@ -128,14 +127,6 @@ void circular_buffer<T>::push_front(const T& t)
     {
         ++m_size;
     }
-}
-
-template<typename T>
-void circular_buffer<T>::pop_back(unsigned int n)
-{
-    assert(m_size >= n);
-    m_tail = (m_tail + n) % m_capacity;
-    m_size -= n;
 }
 
 template<typename T>

@@ -89,7 +89,7 @@ device in the link between <span style="font-style: italic;">PHD2</span>
 and the mount:</p>
 <ol>
 <li>Any of the guide cameras which have an ST-4 compatible
-"on-camera" guider interface. Use the 'on camera' mount choice for these setups.</li>
+"on-board" guider interface</li>
 <li>Any of the Shoestring GP-xxx devices</li>
 <li>A supported AO device with a guide port interface</li>
 </ol>
@@ -106,9 +106,9 @@ calibration won't be automatically adjusted for declination, nor will
 it be automatically "flipped" when the side-of-pier changes. &nbsp;You
 can restore these features by specifying an "aux" mount connection that
 will be used only to get the telescope pointing information. &nbsp;An
-example is shown below: <br><br><img style="width: 459px; height: 290px;" alt="" src="Gear_Aux_Dialog.png"><br><br>For
+example is shown below: <br><br><img style="width: 459px; height: 290px;" alt="" src="Gear_Aux_Dialog.PNG"><br><br>For
 Windows users, the "aux" mount can use any of the ASCOM-compatible
-mount drivers, while Linux users can take advantage of INDI drivers.
+mount drivers, while Unix users can take advantage of INDI drivers.
 &nbsp;The "aux" mount choice will be used only if the primary mount
 interface cannot return pointing information - it will otherwise be
 ignored.
@@ -205,14 +205,7 @@ to experiment to understand what works best for your situation.
 &nbsp;</li>
 </ol>
 As a starting point,&nbsp;try using exposure durations in the range
-of one to five seconds.<br>
-<br>
-There is also an Auto exposure time selection available. When exposure
-is set to Auto, PHD2 will attempt to adjust the exposure to keep the
-selected guide star at a constant signal-to-noise ratio (SNR) value.
-The Auto setting can be especially beneficial for AO users who want to
-minimize exposure time without losing the guide star. The settings to control
-Auto-exposure are on the <a href="Advanced_settings.htm#Global_Tab">Global Tab</a> of the Advanced Dialog.
+of one to five seconds.
 <h3><a name="Automatic_Calibration"></a>Automatic
 Calibration</h3>
 <h4>Conventional Mounts</h4>

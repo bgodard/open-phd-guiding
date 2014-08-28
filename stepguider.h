@@ -119,7 +119,6 @@ protected:
 public:
     virtual ConfigDialogPane *GetConfigDialogPane(wxWindow *pParent);
     virtual wxString GetSettingsSummary(void);
-    virtual wxString CalibrationSettingsSummary(void);
     virtual wxString GetMountClassName(void) const;
     virtual bool IsStepGuider(void) const;
     virtual wxPoint GetAoPos(void) const;
@@ -153,7 +152,6 @@ private:
     MOVE_RESULT Move(GUIDE_DIRECTION direction, int amount, bool normalMove, int *amountMoved);
     MOVE_RESULT CalibrationMove(GUIDE_DIRECTION direction, int steps);
     int CalibrationMoveSize(void);
-    int CalibrationTotDistance(void);
     void InitBumpPositions(void);
 
     double CalibrationTime(int nCalibrationSteps);

@@ -36,9 +36,6 @@
 #ifndef MOUNT_H_INCLUDED
 #define MOUNT_H_INCLUDED
 
-#include "guide_algorithms.h"
-#include "messagebox_proxy.h"
-
 enum GUIDE_DIRECTION {
     NONE  = -1,
     UP = 0,
@@ -165,15 +162,12 @@ public:
 
     void AdjustCalibrationForScopePointing(void);
 
-    static wxString PierSideStr(PierSide side);
-
     // pure virutal functions -- these MUST be overridden by a subclass
 public:
     // move the requested direction, return the actual amount of the move
     virtual MOVE_RESULT Move(GUIDE_DIRECTION direction, int amount, bool normalMove, int *amountMoved) = 0;
     virtual MOVE_RESULT CalibrationMove(GUIDE_DIRECTION direction, int duration) = 0;
     virtual int CalibrationMoveSize(void) = 0;
-    virtual int CalibrationTotDistance(void) = 0;
 
     // Calibration related routines
     virtual bool BeginCalibration(const PHD_Point &currentLocation) = 0;
@@ -227,7 +221,6 @@ public:
     virtual bool CanReportPosition();                   // Can report RA, Dec, side-of-pier, etc.
 
     virtual wxString GetSettingsSummary();
-    virtual wxString CalibrationSettingsSummary() { return wxEmptyString; }
 
     virtual bool CalibrationFlipRequiresDecFlip(void);
 

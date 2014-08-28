@@ -113,10 +113,6 @@ protected:
     };
     ScopeGraphControlPane *m_graphControlPane;
 
-    friend class GraphLogWindow;
-
-public:
-
     virtual int GetCalibrationDuration(void);
     virtual bool SetCalibrationDuration(int calibrationDuration);
     virtual int GetMaxDecDuration(void);
@@ -126,16 +122,19 @@ public:
     virtual DEC_GUIDE_MODE GetDecGuideMode(void);
     virtual bool SetDecGuideMode(int decGuideMode);
 
+    friend class GraphLogWindow;
+
+public:
     virtual ConfigDialogPane *GetConfigDialogPane(wxWindow *pParent);
     virtual GraphControlPane *GetGraphControlPane(wxWindow *pParent, const wxString& label);
     virtual wxString GetSettingsSummary();
-    virtual wxString CalibrationSettingsSummary();
     virtual wxString GetMountClassName() const;
 
     static wxArrayString List(void);
     static wxArrayString AuxMountList(void);
     static Scope *Factory(const wxString& choice);
 
+public:
     Scope(void);
     virtual ~Scope(void);
 
@@ -162,7 +161,6 @@ private:
     MOVE_RESULT Move(GUIDE_DIRECTION direction, int durationMs, bool normalMove, int *amountMoved);
     MOVE_RESULT CalibrationMove(GUIDE_DIRECTION direction, int duration);
     int CalibrationMoveSize(void);
-    int CalibrationTotDistance(void);
 
     void ClearCalibration(void);
     wxString GetCalibrationStatus(double dX, double dY, double dist, double dist_crit);

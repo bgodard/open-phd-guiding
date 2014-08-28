@@ -55,15 +55,15 @@ ManualCalDialog::ManualCalDialog(double xRate, double yRate, double xAngle, doub
     pGridSizer->Add(pLabel);
     pGridSizer->Add(m_pYRate);
 
-    pLabel = new wxStaticText(this,wxID_ANY, _("RA angle (degrees):"));
+    pLabel = new wxStaticText(this,wxID_ANY, _("RA angle (e.g. 0.5):"));
     m_pXAngle = new wxTextCtrl(this,wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(width, -1));
-    m_pXAngle->SetValue(wxString::Format("%.1f", xAngle * 180. / M_PI));
+    m_pXAngle->SetValue(wxString::Format("%.3f", xAngle));
     pGridSizer->Add(pLabel);
     pGridSizer->Add(m_pXAngle);
 
-    pLabel = new wxStaticText(this,wxID_ANY, _("Dec angle (degrees):"));
+    pLabel = new wxStaticText(this,wxID_ANY, _("Dec angle (e.g. 2.1):"));
     m_pYAngle = new wxTextCtrl(this,wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(width, -1));
-    m_pYAngle->SetValue(wxString::Format("%.1f", yAngle * 180. / M_PI));
+    m_pYAngle->SetValue(wxString::Format("%.3f", yAngle));
     pGridSizer->Add(pLabel);
     pGridSizer->Add(m_pYAngle);
 
@@ -96,11 +96,8 @@ void ManualCalDialog::GetValues(double *xRate, double *yRate, double *xAngle, do
 {
     m_pXRate->GetValue().ToDouble(xRate);
     m_pYRate->GetValue().ToDouble(yRate);
-    double t;
-    m_pXAngle->GetValue().ToDouble(&t);
-    *xAngle = t * M_PI / 180.;
-    m_pYAngle->GetValue().ToDouble(&t);
-    *yAngle = t * M_PI / 180.;
+    m_pXAngle->GetValue().ToDouble(xAngle);
+    m_pYAngle->GetValue().ToDouble(yAngle);
     m_pDeclination->GetValue().ToDouble(declination);
 }
 

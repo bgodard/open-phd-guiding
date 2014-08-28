@@ -74,8 +74,6 @@ void MyFrame::OnExposureDurationSelected(wxCommandEvent& WXUNUSED(evt))
         m_autoExp.enabled = true;
     }
 
-    GuideLog.SetGuidingParam("Exposure", ExposureDurationSummary());
-
     pConfig->Profile.SetString("/ExposureDuration", sel);
 }
 
@@ -193,16 +191,7 @@ void MyFrame::OnExposeComplete(wxThreadEvent& event)
     {
         Debug.AddLine("Processing an image");
 
-        m_exposurePending = false;
-
         usImage *pNewFrame = event.GetPayload<usImage *>();
-
-        if (pGuider->GetPauseType() == PAUSE_FULL)
-        {
-            delete pNewFrame;
-            Debug.AddLine("guider is paused, ignoring frame, not scheduling exposure");
-            return;
-        }
 
         if (event.GetInt())
         {
@@ -322,6 +311,7 @@ void MyFrame::LoadDarkHandler(bool checkIt)
         if (pCamera->CurrentDefectMap)
             LoadDefectMapHandler(false);
         LoadDarkLibrary();
+        SetStatusText(_("Dark library loaded"));
     }
     else
     {
@@ -391,17 +381,13 @@ void MyFrame::OnRefineDefMap(wxCommandEvent& evt)
     if (!pRefineDefMap)
         pRefineDefMap = new RefineDefMap(this);
 
-    if (pRefineDefMap->InitUI())                    // UI ready go, user wants to proceed
-    {
-        pRefineDefMap->Show();
+    pRefineDefMap->InitUI();
+    pRefineDefMap->Show();
 
-        // Don't let the user build a new defect map while we're trying to refine one; and it almost certainly makes sense
-        // to have a defect map loaded if the user wants to refine it
-        m_takeDarksMenuItem->Enable(false);             // Dialog restores it when its window is closed
-        LoadDefectMapHandler(true);
-    }
-    else
-        pRefineDefMap->Destroy();                       // user cancelled out before starting the process
+    // Don't let the user build a new defect map while we're trying to refine one; and it almost certainly makes sense
+    // to have a defect map loaded if the user wants to refine it
+    m_takeDarksMenuItem->Enable(false);  // Dialog restores it when its window is closed
+    LoadDefectMapHandler(true);
 }
 
 void MyFrame::OnToolBar(wxCommandEvent& evt)
@@ -430,20 +416,6 @@ void MyFrame::OnGraph(wxCommandEvent& evt)
         m_mgr.GetPane(_T("GraphLog")).Hide();
     }
     this->pGraphLog->SetState(evt.IsChecked());
-    m_mgr.Update();
-}
-
-void MyFrame::OnStats(wxCommandEvent& evt)
-{
-    if (evt.IsChecked())
-    {
-        m_mgr.GetPane(_T("Stats")).Show().Bottom().Position(0).MinSize(-1, 240);
-    }
-    else
-    {
-        m_mgr.GetPane(_T("Stats")).Hide();
-    }
-    pStatsWin->SetState(evt.IsChecked());
     m_mgr.Update();
 }
 
@@ -571,31 +543,6 @@ void MyFrame::OnAdvanced(wxCommandEvent& WXUNUSED(event))
     }
 }
 
-static wxString DarksWarningEnabledKey()
-{
-    // we want the key to be under "/Confirm" so ConfirmDialog::ResetAllDontAskAgain() resets it, but we also want the setting to be per-profile
-    return wxString::Format("/Confirm/%d/DarksWarningEnabled", pConfig->GetCurrentProfileId());
-}
-
-static void SuppressDarksAlert(long)
-{
-    pConfig->Global.SetBoolean(DarksWarningEnabledKey(), false);
-}
-
-static void ValidateDarksLoaded(void)
-{
-    if (!pCamera->CurrentDarkFrame && !pCamera->CurrentDefectMap)
-    {
-        if (pConfig->Global.GetBoolean(DarksWarningEnabledKey(), true))
-        {
-            pFrame->Alert(_("For best results, use a Dark Library or a Bad-pixel Map "
-                "while guiding. This will help prevent PHD from locking on to a hot pixel. "
-                "Use the Darks menu to build a Dark Library or Bad-pixel Map."),
-                _("Don't show\nthis again"), SuppressDarksAlert, 0);
-        }
-    }
-}
-
 void MyFrame::OnGuide(wxCommandEvent& WXUNUSED(event))
 {
     try
@@ -621,8 +568,6 @@ void MyFrame::OnGuide(wxCommandEvent& WXUNUSED(event))
             wxMessageBox(_T("Please select a guide star before attempting to guide"));
             throw ERROR_INFO("Unable to guide with state < STATE_SELECTED");
         }
-
-        ValidateDarksLoaded();
 
         if (wxGetKeyState(WXK_SHIFT))
         {
@@ -677,11 +622,6 @@ void MyFrame::OnPanelClose(wxAuiManagerEvent& evt)
         Menubar->Check(MENU_GRAPH, false);
         this->pGraphLog->SetState(false);
     }
-    if (p->name == _T("Stats"))
-    {
-        Menubar->Check(MENU_STATS, false);
-        this->pGraphLog->SetState(false);
-    }
     if (p->name == _T("Profile"))
     {
         Menubar->Check(MENU_STARPROFILE, false);
@@ -707,7 +647,7 @@ void MyFrame::OnSelectGear(wxCommandEvent& evt)
         {
             throw ERROR_INFO("OnSelectGear called while CaptureActive");
         }
-        pFrame->pGearDialog->ShowGearDialog(wxGetKeyState(WXK_SHIFT));
+        pFrame->pGearDialog->ShowModal(wxGetKeyState(WXK_SHIFT));
     }
     catch (wxString Msg)
     {
