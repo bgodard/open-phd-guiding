@@ -172,7 +172,7 @@ bool Camera_QHY5IIBase::ST4PulseGuideScope(int direction, int duration)
         default: return true; // bad direction passed in
     }
     Q5II_GuideCommand(reg,ptx,pty);
-    WorkerThread::MilliSleep(duration + 10);
+    wxMilliSleep(duration + 10);
     return false;
 }
 
@@ -198,13 +198,6 @@ bool Camera_QHY5IIBase::Disconnect()
     return false;
 }
 
-static bool StopExposure()
-{
-    Debug.AddLine("Q5II: cancel exposure");
-    Q5II_CancelExposure();
-    return true;
-}
-
 bool Camera_QHY5IIBase::Capture(int duration, usImage& img, wxRect subframe, bool recon)
 {
 // Only does full frames still
@@ -217,10 +210,12 @@ bool Camera_QHY5IIBase::Capture(int duration, usImage& img, wxRect subframe, boo
     int ysize = FullSize.GetHeight();
 //  bool firstimg = true;
 
-    if (img.Init(FullSize))
-    {
-        DisconnectWithAlert(CAPT_FAIL_MEMORY);
-        return true;
+    if (img.NPixels != (xsize*ysize)) {
+        if (img.Init(xsize,ysize)) {
+            pFrame->Alert(_("Memory allocation error during capture"));
+            Disconnect();
+            return true;
+        }
     }
 
     if (duration != last_dur) {
@@ -234,28 +229,12 @@ bool Camera_QHY5IIBase::Capture(int duration, usImage& img, wxRect subframe, boo
     }
 
     Q5II_SingleExposure();
-
-    CameraWatchdog watchdog(duration, GetTimeoutMs());
-
-    if (WorkerThread::MilliSleep(duration, WorkerThread::INT_ANY) &&
-        (WorkerThread::TerminateRequested() || StopExposure()))
-    {
-        return true;
-    }
-
-    while (Q5II_IsExposing())
-    {
+    wxMilliSleep(duration);
+    //int foo = 0;
+    while (Q5II_IsExposing()) {
+        //pFrame->SetStatusText(wxString::Format("%d",foo));
         wxMilliSleep(100);
-        if (WorkerThread::InterruptRequested() &&
-            (WorkerThread::TerminateRequested() || StopExposure()))
-        {
-            return true;
-        }
-        if (watchdog.Expired())
-        {
-            DisconnectWithAlert(CAPT_FAIL_TIMEOUT);
-            return true;
-        }
+        //foo++;
     }
 
     Q5II_GetFrameData(RawBuffer,xsize*ysize);
@@ -273,5 +252,18 @@ bool Camera_QHY5IIBase::Capture(int duration, usImage& img, wxRect subframe, boo
 
     return false;
 }
+
+/*bool Camera_QHY5IIBase::CaptureCrop(int duration, usImage& img) {
+    GenericCapture(duration, img, width,height,startX,startY);
+
+return false;
+}
+
+bool Camera_QHY5IIBase::CaptureFull(int duration, usImage& img) {
+    GenericCapture(duration, img, FullSize.GetWidth(),FullSize.GetHeight(),0,0);
+
+    return false;
+}
+*/
 
 #endif

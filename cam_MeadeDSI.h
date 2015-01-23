@@ -33,25 +33,26 @@
  */
 #ifndef DSIDEF
 #define DSIDEF
-
 #if defined (__APPLE__)
 //#include <IOKit/IOCFBundle.h>
 #include <IOKit/usb/IOUSBLib.h>
 //#include <IOKit/IOCFPlugIn.h>
 #endif
+#include "DsiDevice.h"
 
-class DsiDevice;
 
-class Camera_DSIClass : public GuideCamera
-{
+class Camera_DSIClass : public GuideCamera {
 private:
+//  gcroot<DSI_Class^> MeadeCam;
     DsiDevice *MeadeCam;
 public:
-    bool    Capture(int duration, usImage& img, wxRect subframe = wxRect(0,0,0,0), bool recon=false);
-    bool    HasNonGuiCapture(void);
-    bool    Connect();
+    virtual bool    Capture(int duration, usImage& img, wxRect subframe = wxRect(0,0,0,0), bool recon=false);
+    virtual bool HasNonGuiCapture(void);
+    bool    Connect();      // Opens up and connects to cameras
     bool    Disconnect();
+    //bool  IsSeries2;
     Camera_DSIClass();
+    ~Camera_DSIClass() { ; }
 };
 
 #endif

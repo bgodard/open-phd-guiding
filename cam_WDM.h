@@ -39,22 +39,21 @@
 #ifndef WDM_H_INCLUDED
 #define WDM_H_INCLUDED
 
+#include <opencv/cv.h>
+
 #define CVRES_VIDCAP_OFFSET wxID_HIGHEST+1
 #include "VidCapture.h"  // For DirectShow
 
 class Camera_WDMClass : public GuideCamera
 {
 public:
-    Camera_WDMClass(int devNumber = -1);
-
-    bool Capture(int duration, usImage& img, wxRect subframe = wxRect(0, 0, 0, 0), bool recon = false);
-    bool CaptureOneFrame(usImage& img, wxRect subframe = wxRect(0,0,0,0), bool recon=false);
-    bool Connect();
-    bool Disconnect();
-    void ShowPropertyDialog();
-    void InitCapture() { return; }
-    bool HasNonGuiCapture(void) { return true; }
-
+    virtual bool    Capture(int duration, usImage& img, wxRect subframe = wxRect(0,0,0,0), bool recon=false);
+    virtual bool    CaptureOneFrame(usImage& img, wxRect subframe = wxRect(0,0,0,0), bool recon=false);
+    bool    Connect();
+    bool    Disconnect();
+    void    ShowPropertyDialog();
+    void    InitCapture() { return; }
+    Camera_WDMClass(int devNumber=-1);
 protected:
     static bool CaptureCallback( CVRES status, CVImage* imagePtr, void* userParam);
     volatile int m_nFrames;

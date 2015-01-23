@@ -95,13 +95,6 @@ enum MOVE_LOCK_RESULT
     MOVE_LOCK_ERROR,
 };
 
-enum PauseType
-{
-    PAUSE_NONE,     // not paused
-    PAUSE_GUIDING,  // pause guide corrections but continue looping exposures
-    PAUSE_FULL,     // pause guide corrections and pause looping exposures
-};
-
 struct LockPosShiftParams
 {
     bool shiftEnabled;
@@ -131,7 +124,7 @@ class Guider : public wxWindow
     double m_polarAlignCircleRadius;
     double m_polarAlignCircleCorrection;
     PHD_Point m_polarAlignCircleCenter;
-    PauseType m_paused;
+    bool m_paused;
     ShiftPoint m_lockPosition;
     PHD_Point m_ditherRecenterStep;
     wxPoint m_ditherRecenterDir;
@@ -184,16 +177,15 @@ protected:
     void ToggleBookmark(const wxRealPoint& pt);
 
 public:
-    bool IsPaused(void) const;
-    PauseType GetPauseType(void) const;
-    PauseType SetPaused(PauseType pause);
+    bool IsPaused(void);
+    bool SetPaused(bool paused);
     GUIDER_STATE GetState(void);
     static EXPOSED_STATE GetExposedState(void);
     bool IsCalibratingOrGuiding(void);
-    bool IsGuiding(void) const;
     void OnClose(wxCloseEvent& evt);
     void OnErase(wxEraseEvent& evt);
     void UpdateImageDisplay(usImage *pImage=NULL);
+    bool DoGuide(void);
 
     MOVE_LOCK_RESULT MoveLockPosition(const PHD_Point& mountDelta);
     bool SetLockPosition(const PHD_Point& position);
@@ -241,13 +233,13 @@ private:
 public:
     virtual void LoadProfileSettings(void);
 
-    // pure virtual functions -- these MUST be overridden by a subclass
+    // pure virutal functions -- these MUST be overridden by a subclass
 public:
     virtual bool IsValidLockPosition(const PHD_Point& pt) = 0;
 private:
     virtual void InvalidateCurrentPosition(bool fullReset = false) = 0;
-    virtual bool UpdateCurrentPosition(usImage *pImage, FrameDroppedInfo *errorInfo) = 0;
-    virtual bool SetCurrentPosition(usImage *pImage, const PHD_Point& position) = 0;
+    virtual bool UpdateCurrentPosition(usImage *pImage, wxString& statusMessage) = 0;
+    virtual bool SetCurrentPosition(usImage *pImage, const PHD_Point& position)=0;
 
 public:
     virtual void OnPaint(wxPaintEvent& evt) = 0;
@@ -275,20 +267,5 @@ private:
     void UpdateLockPosShiftCameraCoords(void);
     DECLARE_EVENT_TABLE()
 };
-
-inline bool Guider::IsPaused(void) const
-{
-    return m_paused != PAUSE_NONE;
-}
-
-inline PauseType Guider::GetPauseType(void) const
-{
-    return m_paused;
-}
-
-inline bool Guider::IsGuiding(void) const
-{
-    return m_state == STATE_GUIDING;
-}
 
 #endif /* GUIDER_H_INCLUDED */

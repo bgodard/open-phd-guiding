@@ -117,7 +117,7 @@ Mount::MOVE_RESULT ScopeVoyager::Guide(GUIDE_DIRECTION direction, int duration)
         sprintf(msg,"MOVE %c\n\n",dir);
         VoyagerClient.Write(msg,strlen(msg));
         VoyagerClient.Read(&msg,10);
-        WorkerThread::MilliSleep(duration, WorkerThread::INT_ANY);
+        wxMilliSleep(duration);
         sprintf(msg,"STOP %c\n\n",dir);
         VoyagerClient.Write(msg,strlen(msg));
         VoyagerClient.Read(&msg,10);

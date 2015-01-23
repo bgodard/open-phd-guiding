@@ -170,7 +170,7 @@ bool Camera_LEWebcamClass::Capture(int duration, usImage& img, wxRect subframe, 
             srcPtr = &frame3;
         }
 
-        if (img.Init(srcPtr->Size))
+        if (img.Init(srcPtr->Size.x, srcPtr->Size.y))
         {
             throw ERROR_INFO("img.Init() failed");
         }

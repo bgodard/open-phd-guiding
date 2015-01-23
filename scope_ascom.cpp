@@ -43,7 +43,6 @@
 #include "comdispatch.h"
 
 #include <wx/msw/ole/oleutils.h>
-#include <comdef.h>
 #include <objbase.h>
 #include <ole2ver.h>
 #include <initguid.h>
@@ -51,10 +50,30 @@
 #include <wx/stdpaths.h>
 #include <wx/stopwatch.h>
 
+struct AutoASCOMDriver
+{
+    IDispatch *m_driver;
+    AutoASCOMDriver(IGlobalInterfaceTable *igit, DWORD cookie)
+    {
+        if (FAILED(igit->GetInterfaceFromGlobal(cookie, IID_IDispatch, (LPVOID *) &m_driver)))
+        {
+            throw ERROR_INFO("ASCOM Scope: Cannot get interface from Global Interface Table");
+        }
+    }
+    ~AutoASCOMDriver()
+    {
+        m_driver->Release();
+    }
+    operator IDispatch *() const { return m_driver; }
+    IDispatch *operator->() const { return m_driver; }
+    IDispatch *get() const { return m_driver; }
+};
+
 ScopeASCOM::ScopeASCOM(const wxString& choice)
 {
+    m_pIGlobalInterfaceTable = NULL;
+    m_dwCookie = 0;
     m_choice = choice;
-    m_bCanPulseGuide = false;                           // will get updated in Connect()
 
     dispid_connected = DISPID_UNKNOWN;
     dispid_ispulseguiding = DISPID_UNKNOWN;
@@ -74,6 +93,16 @@ ScopeASCOM::ScopeASCOM(const wxString& choice)
 
 ScopeASCOM::~ScopeASCOM(void)
 {
+    if (m_pIGlobalInterfaceTable)
+    {
+        if (m_dwCookie)
+        {
+            m_pIGlobalInterfaceTable -> RevokeInterfaceFromGlobal(m_dwCookie);
+            m_dwCookie = 0;
+        }
+        m_pIGlobalInterfaceTable -> Release();
+        m_pIGlobalInterfaceTable = NULL;
+    }
 }
 
 static wxString displayName(const wxString& ascomName)
@@ -89,26 +118,24 @@ static std::map<wxString, wxString> s_progid;
 wxArrayString ScopeASCOM::EnumAscomScopes()
 {
     wxArrayString list;
+    list.Add(_T("ASCOM Telescope Chooser"));
 
     try
     {
         DispatchObj profile;
         if (!profile.Create(L"ASCOM.Utilities.Profile"))
-            throw ERROR_INFO("ASCOM Scope: could not instantiate ASCOM profile class ASCOM.Utilities.Profile. Is ASCOM installed?");
+            throw ERROR_INFO("ASCOM Camera: could not instantiate ASCOM profile class");
 
         VARIANT res;
         if (!profile.InvokeMethod(&res, L"RegisteredDevices", L"Telescope"))
-            throw ERROR_INFO("ASCOM Scope: could not query registered telescope devices: " + ExcepMsg(profile.Excep()));
+            throw ERROR_INFO("ASCOM Camera: could not query registered telescope devices");
 
         DispatchClass ilist_class;
         DispatchObj ilist(res.pdispVal, &ilist_class);
 
         VARIANT vcnt;
         if (!ilist.GetProp(&vcnt, L"Count"))
-            throw ERROR_INFO("ASCOM Scope: could not query registered telescopes: " + ExcepMsg(ilist.Excep()));
-
-        // if we made it this far ASCOM is installed and apprears sane, so add the chooser
-        list.Add(_T("ASCOM Telescope Chooser"));
+            throw ERROR_INFO("ASCOM Camera: could not query registered telescopes");
 
         unsigned int const count = vcnt.intVal;
         DispatchClass kvpair_class;
@@ -122,9 +149,9 @@ wxArrayString ScopeASCOM::EnumAscomScopes()
                 VARIANT vkey, vval;
                 if (kvpair.GetProp(&vkey, L"Key") && kvpair.GetProp(&vval, L"Value"))
                 {
-                    wxString ascomName = vval.bstrVal;
+                    wxString ascomName = wxBasicString(vval.bstrVal).Get();
                     wxString displName = displayName(ascomName);
-                    wxString progid = vkey.bstrVal;
+                    wxString progid = wxBasicString(vkey.bstrVal).Get();
                     s_progid[displName] = progid;
                     list.Add(displName);
                 }
@@ -144,14 +171,12 @@ static bool ChooseASCOMScope(BSTR *res)
     DispatchObj chooser;
     if (!chooser.Create(L"DriverHelper.Chooser"))
     {
-        Debug.AddLine("Chooser instantiate failed: " + ExcepMsg(chooser.Excep()));
         wxMessageBox(_("Failed to find the ASCOM Chooser. Make sure it is installed"), _("Error"), wxOK | wxICON_ERROR);
         return false;
     }
 
     if (!chooser.PutProp(L"DeviceType", L"Telescope"))
     {
-        Debug.AddLine("Chooser put prop failed: " + ExcepMsg(chooser.Excep()));
         wxMessageBox(_("Failed to set the Chooser's type to Telescope. Something is wrong with ASCOM"), _("Error"), wxOK | wxICON_ERROR);
         return false;
     }
@@ -201,10 +226,13 @@ bool ScopeASCOM::Create(DispatchObj& obj)
 {
     try
     {
-        // is there already an instance registered in the global interface table?
-        IDispatch *idisp = m_gitEntry.Get();
-        if (idisp)
+        if (m_dwCookie)
         {
+            IDispatch *idisp;
+            if (FAILED(m_pIGlobalInterfaceTable->GetInterfaceFromGlobal(m_dwCookie, IID_IDispatch, (LPVOID *) &idisp)))
+            {
+                throw ERROR_INFO("ScopeASCOM: m_dwCookie is non-zero but GetInterfaceFromGlobal failed!");
+            }
             obj.Attach(idisp, NULL);
             return true;
         }
@@ -223,7 +251,23 @@ bool ScopeASCOM::Create(DispatchObj& obj)
         Debug.AddLine(wxString::Format("pScopeDriver = 0x%p", obj.IDisp()));
 
         // store the driver interface in the global table for access by other threads
-        m_gitEntry.Register(obj);
+        if (m_pIGlobalInterfaceTable == NULL)
+        {
+            // first find the global table
+            if (FAILED(::CoCreateInstance(CLSID_StdGlobalInterfaceTable, NULL, CLSCTX_INPROC_SERVER, IID_IGlobalInterfaceTable,
+                    (void **)&m_pIGlobalInterfaceTable)))
+            {
+                throw ERROR_INFO("ASCOM Scope: Cannot CoCreateInstance of Global Interface Table");
+            }
+        }
+        assert(m_pIGlobalInterfaceTable);
+
+        // add the Interface to the global table. Any errors past this point need to remove the interface from the global table.
+        if (FAILED(m_pIGlobalInterfaceTable->RegisterInterfaceInGlobal(obj.IDisp(), IID_IDispatch, &m_dwCookie)))
+        {
+            throw ERROR_INFO("ASCOM Scope: Cannot register with Global Interface Table");
+        }
+        assert(m_dwCookie);
     }
     catch (const wxString& msg)
     {
@@ -368,28 +412,10 @@ bool ScopeASCOM::Connect(void)
             dispid_abortslew = DISPID_UNKNOWN;
         }
 
-        struct ConnectInBg : public ConnectMountInBg
+        // ... set the Connected property to true....
+        if (!pScopeDriver.PutProp(dispid_connected, true))
         {
-            ScopeASCOM *sa;
-            ConnectInBg(ScopeASCOM *sa_) : sa(sa_) { }
-            bool Entry()
-            {
-                GITObjRef scope(sa->m_gitEntry);
-                // ... set the Connected property to true....
-                if (!scope.PutProp(sa->dispid_connected, true))
-                {
-                    SetErrorMsg(ExcepMsg(scope.Excep()));
-                    return true;
-                }
-                return false;
-            }
-        };
-        ConnectInBg bg(this);
-
-        // set the Connected property to true in a background thread
-        if (bg.Run())
-        {
-            wxMessageBox(_T("ASCOM driver problem during connection: ") + bg.GetErrorMsg(),
+            wxMessageBox(_T("ASCOM driver problem during connection: ") + wxString(pScopeDriver.Excep().bstrDescription),
                 _("Error"), wxOK | wxICON_ERROR);
             throw ERROR_INFO("ASCOM Scope: Could not set Connected property to true");
         }
@@ -399,10 +425,12 @@ bool ScopeASCOM::Connect(void)
         if (!pScopeDriver.GetProp(&vRes, L"Name"))
         {
             wxMessageBox(_T("ASCOM driver problem getting Name property"), _("Error"), wxOK | wxICON_ERROR);
-            throw ERROR_INFO("ASCOM Scope: Could not get the scope name: " + ExcepMsg(pScopeDriver.Excep()));
+            throw ERROR_INFO("ASCOM Scope: Could not get the scope name");
         }
 
-        m_Name = vRes.bstrVal;
+        char *cp = uni_to_ansi(vRes.bstrVal); // Get ProgID in ANSI
+        m_Name = cp;
+        free(cp);
 
         Debug.AddLine("Scope reports its name as " + m_Name);
 
@@ -419,11 +447,10 @@ bool ScopeASCOM::Connect(void)
         }
 
         // see if we can pulse guide
-        m_bCanPulseGuide = true;
         if (!pScopeDriver.GetProp(&vRes, L"CanPulseGuide") || !vRes.boolVal)
         {
-            Debug.AddLine("Connecting to ASCOM scope that does not support PulseGuide");
-            m_bCanPulseGuide = false;
+            wxMessageBox(_T("ASCOM driver does not support the needed Pulse Guide method."),_("Error"), wxOK | wxICON_ERROR);
+            throw ERROR_INFO("ASCOM Scope: Cannot pulseguide");
         }
 
         // see if we can slew
@@ -431,7 +458,7 @@ bool ScopeASCOM::Connect(void)
         {
             if (!pScopeDriver.GetProp(&vRes, L"CanSlew"))
             {
-                Debug.AddLine("ASCOM scope got error invoking CanSlew: " + ExcepMsg(pScopeDriver.Excep()));
+                Debug.AddLine("ASCOM scope got error invoking CanSlew");
                 m_bCanSlew = false;
             }
             else if (!vRes.boolVal)
@@ -468,13 +495,14 @@ bool ScopeASCOM::Disconnect(void)
             throw ERROR_INFO("ASCOM Scope: attempt to disconnect when not connected");
         }
 
-        GITObjRef scope(m_gitEntry);
+        AutoASCOMDriver pScopeDriver(m_pIGlobalInterfaceTable, m_dwCookie);
+        DispatchObj scope(pScopeDriver, NULL);
 
         // ... set the Connected property to false....
         if (!scope.PutProp(dispid_connected, false))
         {
             pFrame->Alert(_("ASCOM driver problem during disconnect"));
-            throw ERROR_INFO("ASCOM Scope: Could not set Connected property to false: " + ExcepMsg(scope.Excep()));
+            throw ERROR_INFO("ASCOM Scope: Could not set Connected property to false");
         }
 
         Debug.AddLine("Disconnected Successfully");
@@ -512,14 +540,8 @@ Mount::MOVE_RESULT ScopeASCOM::Guide(GUIDE_DIRECTION direction, int duration)
             throw ERROR_INFO("ASCOM Scope: attempt to guide when not connected");
         }
 
-        if (!m_bCanPulseGuide)
-        {
-            // Could happen if move command is issued on the Aux mount or CanPulseGuide property got changed on the fly
-            pFrame->Alert(_("ASCOM driver does not support PulseGuide"));
-            throw ERROR_INFO("ASCOM scope: guide command issued but PulseGuide not supported");
-        }
-
-        GITObjRef scope(m_gitEntry);
+        AutoASCOMDriver pScopeDriver(m_pIGlobalInterfaceTable, m_dwCookie);
+        DispatchObj scope(pScopeDriver, NULL);
 
         // First, check to see if already moving
 
@@ -566,24 +588,15 @@ Mount::MOVE_RESULT ScopeASCOM::Guide(GUIDE_DIRECTION direction, int duration)
         dispParms.rgdispidNamedArgs = NULL;
 
         wxStopWatch swatch;
-
+        swatch.Start();
         HRESULT hr;
         EXCEPINFO excep;
         VARIANT vRes;
 
-        if (FAILED(hr = scope.IDisp()->Invoke(dispid_pulseguide,IID_NULL,LOCALE_USER_DEFAULT,DISPATCH_METHOD,
-            &dispParms,&vRes,&excep,NULL)))
+        if (FAILED(hr = pScopeDriver->Invoke(dispid_pulseguide,IID_NULL,LOCALE_USER_DEFAULT,DISPATCH_METHOD,
+                                        &dispParms,&vRes,&excep,NULL)))
         {
-            Debug.AddLine(wxString::Format("pulseguide: [%x] %s", hr, _com_error(hr).ErrorMessage()));
-
-            // Make sure nothing got by us and the mount can really handle pulse guide - HIGHLY unlikely
-            if (scope.GetProp(&vRes, L"CanPulseGuide") && !vRes.boolVal)
-            {
-                Debug.AddLine("Tried to guide mount that has no PulseGuide support");
-                // This will trigger a nice alert the next time through Guide
-                m_bCanPulseGuide = false;
-            }
-            throw ERROR_INFO("ASCOM Scope: pulseguide command failed: " + ExcepMsg(excep));
+            throw ERROR_INFO("ASCOM Scope: pulseguide command failed");
         }
 
         long elapsed = swatch.Time();
@@ -593,8 +606,7 @@ Mount::MOVE_RESULT ScopeASCOM::Guide(GUIDE_DIRECTION direction, int duration)
 
             Debug.AddLine("PulseGuide returned control before completion, sleep %lu", rem + 10);
 
-            if (WorkerThread::MilliSleep(rem + 10))
-                throw ERROR_INFO("ASCOM Scope: thread terminate requested");
+            ::wxMilliSleep(rem + 10);
         }
 
         if (IsGuiding(&scope))
@@ -613,9 +625,6 @@ Mount::MOVE_RESULT ScopeASCOM::Guide(GUIDE_DIRECTION direction, int duration)
             while (true)
             {
                 ::wxMilliSleep(20);
-
-                if (WorkerThread::InterruptRequested())
-                    throw ERROR_INFO("ASCOM Scope: thread interrupt requested");
 
                 CheckSlewing(&scope, &result);
 
@@ -682,7 +691,7 @@ bool ScopeASCOM::IsGuiding(DispatchObj *scope)
         if (!scope->GetProp(&vRes, dispid_ispulseguiding))
         {
             pFrame->Alert(_("ASCOM driver failed checking IsPulseGuiding"));
-            throw ERROR_INFO("ASCOM Scope: IsGuiding - IsPulseGuiding failed: " + ExcepMsg(scope->Excep()));
+            throw ERROR_INFO("ASCOM Scope: IsGuiding - IsPulseGuiding failed");
         }
 
         bReturn = vRes.boolVal == VARIANT_TRUE;
@@ -703,7 +712,6 @@ bool ScopeASCOM::IsSlewing(DispatchObj *scope)
     VARIANT vRes;
     if (!scope->GetProp(&vRes, dispid_isslewing))
     {
-        Debug.AddLine("ScopeASCOM::IsSlewing failed: " + ExcepMsg(scope->Excep()));
         pFrame->Alert(_("ASCOM driver failed checking Slewing"));
         return false;
     }
@@ -741,7 +749,9 @@ bool ScopeASCOM::Slewing(void)
             throw ERROR_INFO("ASCOM Scope: Cannot check Slewing when not connected to mount");
         }
 
-        GITObjRef scope(m_gitEntry);
+        AutoASCOMDriver pScopeDriver(m_pIGlobalInterfaceTable, m_dwCookie);
+        DispatchObj scope(pScopeDriver, NULL);
+
         bReturn = IsSlewing(&scope);
     }
     catch (wxString Msg)
@@ -776,15 +786,16 @@ double ScopeASCOM::GetGuidingDeclination(void)
             throw THROW_INFO("!m_bCanGetCoordinates");
         }
 
-        GITObjRef scope(m_gitEntry);
+        AutoASCOMDriver pScopeDriver(m_pIGlobalInterfaceTable, m_dwCookie);
+        DispatchObj scope(pScopeDriver, NULL);
 
         VARIANT vRes;
         if (!scope.GetProp(&vRes, dispid_declination))
         {
-            throw ERROR_INFO("GetDeclination() fails: " + ExcepMsg(scope.Excep()));
+            throw ERROR_INFO("GetDeclination() fails");
         }
 
-        dReturn = radians(vRes.dblVal);
+        dReturn = vRes.dblVal / 180.0 * M_PI;
     }
     catch (wxString Msg)
     {
@@ -792,7 +803,7 @@ double ScopeASCOM::GetGuidingDeclination(void)
         m_bCanGetCoordinates = false;
     }
 
-    Debug.AddLine("ScopeASCOM::GetDeclination() returns %.1f", degrees(dReturn));
+    Debug.AddLine("ScopeASCOM::GetDeclination() returns %.4f", dReturn);
 
     return dReturn;
 }
@@ -815,20 +826,21 @@ bool ScopeASCOM::GetGuideRates(double *pRAGuideRate, double *pDecGuideRate)
             throw THROW_INFO("ASCOM Scope: not capable of getting guide rates");
         }
 
-        GITObjRef scope(m_gitEntry);
+        AutoASCOMDriver pScopeDriver(m_pIGlobalInterfaceTable, m_dwCookie);
+        DispatchObj scope(pScopeDriver, NULL);
 
         VARIANT vRes;
 
         if (!scope.GetProp(&vRes, dispid_decguiderate))
         {
-            throw ERROR_INFO("ASCOM Scope: GuideRateDec() failed: " + ExcepMsg(scope.Excep()));
+            throw ERROR_INFO("ASCOM Scope: GuideRateDec() failed");
         }
 
         *pDecGuideRate = vRes.dblVal;
 
         if (!scope.GetProp(&vRes, dispid_raguiderate))
         {
-            throw ERROR_INFO("ASCOM Scope: GuideRateRA() failed: " + ExcepMsg(scope.Excep()));
+            throw ERROR_INFO("ASCOM Scope: GuideRateRA() failed");
         }
 
         *pRAGuideRate = vRes.dblVal;
@@ -861,27 +873,28 @@ bool ScopeASCOM::GetCoordinates(double *ra, double *dec, double *siderealTime)
             throw THROW_INFO("ASCOM Scope: not capable of getting coordinates");
         }
 
-        GITObjRef scope(m_gitEntry);
+        AutoASCOMDriver pScopeDriver(m_pIGlobalInterfaceTable, m_dwCookie);
+        DispatchObj scope(pScopeDriver, NULL);
 
         VARIANT vRA;
 
         if (!scope.GetProp(&vRA, dispid_rightascension))
         {
-            throw ERROR_INFO("ASCOM Scope: get right ascension failed: " + ExcepMsg(scope.Excep()));
+            throw ERROR_INFO("ASCOM Scope: get right ascension failed");
         }
 
         VARIANT vDec;
 
         if (!scope.GetProp(&vDec, dispid_declination))
         {
-            throw ERROR_INFO("ASCOM Scope: get declination failed: " + ExcepMsg(scope.Excep()));
+            throw ERROR_INFO("ASCOM Scope: get declination failed");
         }
 
         VARIANT vST;
 
         if (!scope.GetProp(&vST, dispid_siderealtime))
         {
-            throw ERROR_INFO("ASCOM Scope: get sidereal time failed: " + ExcepMsg(scope.Excep()));
+            throw ERROR_INFO("ASCOM Scope: get sidereal time failed");
         }
 
         *ra = vRA.dblVal;
@@ -911,20 +924,21 @@ bool ScopeASCOM::GetSiteLatLong(double *latitude, double *longitude)
             throw ERROR_INFO("ASCOM Scope: cannot get site latitude/longitude when not connected");
         }
 
-        GITObjRef scope(m_gitEntry);
+        AutoASCOMDriver pScopeDriver(m_pIGlobalInterfaceTable, m_dwCookie);
+        DispatchObj scope(pScopeDriver, NULL);
 
         VARIANT vLat;
 
         if (!scope.GetProp(&vLat, dispid_sitelatitude))
         {
-            throw ERROR_INFO("ASCOM Scope: get site latitude failed: " + ExcepMsg(scope.Excep()));
+            throw ERROR_INFO("ASCOM Scope: get site latitude failed"); // fixme excepinfo
         }
 
         VARIANT vLong;
 
         if (!scope.GetProp(&vLong, dispid_sitelongitude))
         {
-            throw ERROR_INFO("ASCOM Scope: get site longitude failed: " + ExcepMsg(scope.Excep()));
+            throw ERROR_INFO("ASCOM Scope: get site longitude failed");
         }
 
         *latitude = vLat.dblVal;
@@ -962,11 +976,6 @@ bool ScopeASCOM::CanReportPosition(void)
     return true;
 }
 
-bool ScopeASCOM::CanPulseGuide(void)
-{
-    return m_bCanPulseGuide;
-}
-
 bool ScopeASCOM::SlewToCoordinates(double ra, double dec)
 {
     bool bError = false;
@@ -983,7 +992,8 @@ bool ScopeASCOM::SlewToCoordinates(double ra, double dec)
             throw THROW_INFO("ASCOM Scope: not capable of slewing");
         }
 
-        GITObjRef scope(m_gitEntry);
+        AutoASCOMDriver pScopeDriver(m_pIGlobalInterfaceTable, m_dwCookie);
+        DispatchObj scope(pScopeDriver, NULL);
 
         VARIANT vRes;
 
@@ -1017,13 +1027,14 @@ PierSide ScopeASCOM::SideOfPier(void)
             throw THROW_INFO("ASCOM Scope: not capable of getting side of pier");
         }
 
-        GITObjRef scope(m_gitEntry);
+        AutoASCOMDriver pScopeDriver(m_pIGlobalInterfaceTable, m_dwCookie);
+        DispatchObj scope(pScopeDriver, NULL);
 
         VARIANT vRes;
 
         if (!scope.GetProp(&vRes, dispid_sideofpier))
         {
-            throw ERROR_INFO("ASCOM Scope: SideOfPier failed: " + ExcepMsg(scope.Excep()));
+            throw ERROR_INFO("ASCOM Scope: SideOfPier failed");
         }
 
         switch (vRes.intVal) {

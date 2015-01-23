@@ -37,7 +37,7 @@
 
 #if defined(CAM_QHY5)
 
-#include <libusb-1.0/libusb.h>
+#include <libusb.h>
 #include "camera.h"
 #include "image_math.h"
 
@@ -189,10 +189,14 @@ bool Camera_QHY5Class::Capture(int duration, usImage& img, wxRect subframe, bool
     int gain, gain_val, gain_lut_sz = (int)(sizeof(gain_lut) / sizeof(int));
     int ret, result;
 
-    if (img.Init(xsize, ysize))
+    if (img.NPixels != (xsize * ysize))
     {
-        DisconnectWithAlert(CAPT_FAIL_MEMORY);
-        return true;
+        if (img.Init(xsize, ysize))
+        {
+            wxMessageBox(_T("Memory allocation error during capture"), _("Error"), wxOK | wxICON_ERROR);
+            Disconnect();
+            return true;
+        }
     }
 
     if (GuideCameraGain != last_gain)

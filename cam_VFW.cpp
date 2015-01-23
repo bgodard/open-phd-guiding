@@ -115,8 +115,7 @@ bool Camera_VFWClass::Disconnect() {
     return false;
 }
 
-bool Camera_VFWClass::Capture(int duration, usImage& img, wxRect subframe, bool recon)
-{
+bool Camera_VFWClass::Capture(int duration, usImage& img, wxRect subframe, bool recon) {
     int xsize,ysize, i;
     int NFrames = 0;
     xsize = FullSize.GetWidth();
@@ -129,12 +128,16 @@ bool Camera_VFWClass::Capture(int duration, usImage& img, wxRect subframe, bool 
     wxStopWatch swatch;
 
     //gNumFrames = 0;
-    if (img.Init(FullSize)) {
-        DisconnectWithAlert(CAPT_FAIL_MEMORY);
-        return true;
+    if (img.NPixels != (xsize*ysize)) {
+        if (img.Init(xsize,ysize)) {
+            pFrame->Alert(_("Memory allocation error during capture"));
+            Disconnect();
+            return true;
+        }
     }
-
-    img.Clear();
+    dptr = img.ImageData;
+    for (i=0; i<img.NPixels; i++, dptr++)
+        *dptr = (unsigned short) 0;
 
     swatch.Start(); //wxStartTimer();
     while (still_going) {

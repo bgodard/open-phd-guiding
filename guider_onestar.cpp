@@ -38,7 +38,6 @@
 
 #include "phd.h"
 #include <wx/dir.h>
-#include <algorithm>
 
 #define SCALE_UP_SMALL  // Currently problematic as the box for the star is drawn in the wrong spot.
 
@@ -46,108 +45,8 @@
 #define wxPENSTYLE_DOT wxDOT
 #endif
 
-class MassChecker
-{
-    enum { DefaultTimeWindowMs = 15000 };
-
-    struct Entry
-    {
-        wxLongLong_t time;
-        double mass;
-    };
-
-    std::deque<Entry> m_data;
-    unsigned long m_timeWindow;
-    double *m_tmp;
-    size_t m_tmpSize;
-    int m_lastExposure;
-
-public:
-
-    MassChecker()
-        : m_tmp(0),
-          m_tmpSize(0),
-          m_lastExposure(0)
-    {
-        SetTimeWindow(DefaultTimeWindowMs);
-    }
-
-    ~MassChecker()
-    {
-        delete[] m_tmp;
-    }
-
-    void SetTimeWindow(unsigned int milliseconds)
-    {
-        // an abrupt change in mass will affect the median after approx m_timeWindow/2
-        m_timeWindow = milliseconds * 2;
-    }
-
-    void SetExposure(int exposure)
-    {
-        if (exposure != m_lastExposure)
-        {
-            m_lastExposure = exposure;
-            Reset();
-        }
-    }
-
-    void AppendData(double mass)
-    {
-        wxLongLong_t now = ::wxGetUTCTimeMillis().GetValue();
-        wxLongLong_t oldest = now - m_timeWindow;
-
-        while (m_data.size() > 0 && m_data.front().time < oldest)
-            m_data.pop_front();
-
-        Entry entry;
-        entry.time = now;
-        entry.mass = mass;
-        m_data.push_back(entry);
-    }
-
-    bool CheckMass(double mass, double threshold, double limits[3])
-    {
-        if (m_data.size() < 3)
-            return false;
-
-        if (m_tmpSize < m_data.size())
-        {
-            delete[] m_tmp;
-            m_tmpSize = m_data.size() + 10;
-            m_tmp = new double[m_tmpSize];
-        }
-
-        std::deque<Entry>::const_iterator it = m_data.begin();
-        std::deque<Entry>::const_iterator end = m_data.end();
-        double *p = &m_tmp[0];
-        for (; it != end; ++it)
-            *p++ = it->mass;
-
-        size_t mid = m_data.size() / 2;
-        std::nth_element(&m_tmp[0], &m_tmp[mid], &m_tmp[m_data.size()]);
-        double med = m_tmp[mid];
-
-        limits[0] = med * (1. - threshold);
-        limits[1] = med;
-        limits[2] = med * (1. + threshold);
-
-        return mass < limits[0] || mass > limits[2];
-    }
-
-    void Reset(void)
-    {
-        m_data.clear();
-    }
-};
-
 static const double DefaultMassChangeThreshold = 0.5;
-
-enum {
-    MIN_SEARCH_REGION = 5,
-    DEFAULT_SEARCH_REGION = 15,
-    MAX_SEARCH_REGION = 50,
-};
+static const int DefaultSearchRegion = 15;
 
 BEGIN_EVENT_TABLE(GuiderOneStar, Guider)
     EVT_PAINT(GuiderOneStar::OnPaint)
@@ -155,16 +54,15 @@ BEGIN_EVENT_TABLE(GuiderOneStar, Guider)
 END_EVENT_TABLE()
 
 // Define a constructor for the guide canvas
-GuiderOneStar::GuiderOneStar(wxWindow *parent)
-    : Guider(parent, XWinSize, YWinSize),
-      m_massChecker(new MassChecker())
+GuiderOneStar::GuiderOneStar(wxWindow *parent):
+    Guider(parent, XWinSize, YWinSize)
 {
     SetState(STATE_UNINITIALIZED);
+    m_badMassCount = 0;
 }
 
 GuiderOneStar::~GuiderOneStar()
 {
-    delete m_massChecker;
 }
 
 void GuiderOneStar::LoadProfileSettings(void)
@@ -178,7 +76,7 @@ void GuiderOneStar::LoadProfileSettings(void)
     bool massChangeThreshEnabled = pConfig->Profile.GetBoolean("/guider/onestar/MassChangeThresholdEnabled", massChangeThreshold != 1.0);
     SetMassChangeThresholdEnabled(massChangeThreshEnabled);
 
-    int searchRegion = pConfig->Profile.GetInt("/guider/onestar/SearchRegion", DEFAULT_SEARCH_REGION);
+    int searchRegion = pConfig->Profile.GetInt("/guider/onestar/SearchRegion", DefaultSearchRegion);
     SetSearchRegion(searchRegion);
 }
 
@@ -190,6 +88,7 @@ bool GuiderOneStar::GetMassChangeThresholdEnabled(void)
 void GuiderOneStar::SetMassChangeThresholdEnabled(bool enable)
 {
     m_massChangeThresholdEnabled = enable;
+    m_badMassCount = 0;
     pConfig->Profile.SetBoolean("/guider/onestar/MassChangeThresholdEnabled", enable);
 }
 
@@ -219,6 +118,7 @@ bool GuiderOneStar::SetMassChangeThreshold(double massChangeThreshold)
         m_massChangeThreshold = DefaultMassChangeThreshold;
     }
 
+    m_badMassCount = 0;
     pConfig->Profile.SetDouble("/guider/onestar/MassChangeThreshold", m_massChangeThreshold);
 
     return bError;
@@ -245,7 +145,7 @@ bool GuiderOneStar::SetSearchRegion(int searchRegion)
     {
         POSSIBLY_UNUSED(Msg);
         bError = true;
-        m_searchRegion = DEFAULT_SEARCH_REGION;
+        m_searchRegion = DefaultSearchRegion;
     }
 
     pConfig->Profile.SetInt("/guider/onestar/SearchRegion", m_searchRegion);
@@ -279,8 +179,7 @@ bool GuiderOneStar::SetCurrentPosition(usImage *pImage, const PHD_Point& positio
             throw ERROR_INFO("invalid y value");
         }
 
-        m_massChecker->Reset();
-        bError = !m_star.Find(pImage, m_searchRegion, x, y, pFrame->GetStarFindMode());
+        bError = !m_star.Find(pImage, m_searchRegion, x, y);
     }
     catch (wxString Msg)
     {
@@ -351,25 +250,13 @@ bool GuiderOneStar::AutoSelect(void)
             throw ERROR_INFO("No Current Image");
         }
 
-        // If mount is not calibrated, we need to chose a star a bit farther
-        // from the egde to allow for the motion of the star during
-        // calibration
-        //
-        int edgeAllowance = 0;
-        if (pMount && pMount->IsConnected() && !pMount->IsCalibrated())
-            edgeAllowance = wxMax(edgeAllowance, pMount->CalibrationTotDistance());
-        if (pSecondaryMount && pSecondaryMount->IsConnected() && !pSecondaryMount->IsCalibrated())
-            edgeAllowance = wxMax(edgeAllowance, pSecondaryMount->CalibrationTotDistance());
-
         Star newStar;
-        if (!newStar.AutoFind(*pImage, edgeAllowance, m_searchRegion))
+        if (!newStar.AutoFind(pImage))
         {
             throw ERROR_INFO("Unable to AutoFind");
         }
 
-        m_massChecker->Reset();
-
-        if (!m_star.Find(pImage, m_searchRegion, newStar.X, newStar.Y, Star::FIND_CENTROID))
+        if (!m_star.Find(pImage, m_searchRegion, newStar.X, newStar.Y))
         {
             throw ERROR_INFO("Unable to find");
         }
@@ -388,9 +275,6 @@ bool GuiderOneStar::AutoSelect(void)
             Debug.AddLine("AutoSelect: state = %d, call UpdateGuideState", GetState());
             UpdateGuideState(NULL, false);
         }
-
-        UpdateImageDisplay();
-        pFrame->pProfile->UpdateData(pImage, m_star.X, m_star.Y);
 
 #ifdef BRET_AO_DEBUG
         if (pMount && !pMount->IsCalibrated())
@@ -426,18 +310,8 @@ const PHD_Point& GuiderOneStar::CurrentPosition(void)
     return m_star;
 }
 
-inline static wxRect SubframeRect(const PHD_Point& pos, int halfwidth)
-{
-    return wxRect(ROUND(pos.X - halfwidth),
-                  ROUND(pos.Y - halfwidth),
-                  2 * halfwidth + 1,
-                  2 * halfwidth + 1);
-}
-
 wxRect GuiderOneStar::GetBoundingBox(void)
 {
-    enum { SUBFRAME_BOUNDARY_PX = 0 };
-
     GUIDER_STATE state = GetState();
 
     bool subframe;
@@ -450,17 +324,10 @@ wxRect GuiderOneStar::GetBoundingBox(void)
         subframe = m_star.WasFound();
         pos = CurrentPosition();
         break;
-    case STATE_GUIDING: {
-        subframe = m_star.WasFound();  // true;
-        // As long as the star is close to the lock position, keep the subframe
-        // at the lock position. Otherwise, follow the star.
-        double dist = CurrentPosition().Distance(LockPosition());
-        if ((int) dist > m_searchRegion / 3)
-            pos = CurrentPosition();
-        else
-            pos = LockPosition();
+    case STATE_GUIDING:
+        subframe = true;
+        pos = LockPosition();
         break;
-    }
     default:
         subframe = false;
     }
@@ -472,7 +339,8 @@ wxRect GuiderOneStar::GetBoundingBox(void)
 
     if (subframe)
     {
-        wxRect box(SubframeRect(pos, m_searchRegion + SUBFRAME_BOUNDARY_PX));
+        wxRect box(pos.X - 3 * m_searchRegion, pos.Y - 3 * m_searchRegion,
+                6 * m_searchRegion, 6 * m_searchRegion);
         box.Intersect(wxRect(0, 0, pCamera->FullSize.x, pCamera->FullSize.y));
         return box;
     }
@@ -527,15 +395,12 @@ static wxString StarStatusStr(const Star& star)
     }
 }
 
-bool GuiderOneStar::UpdateCurrentPosition(usImage *pImage, FrameDroppedInfo *errorInfo)
+bool GuiderOneStar::UpdateCurrentPosition(usImage *pImage, wxString& statusMessage)
 {
     if (!m_star.IsValid() && m_star.X == 0.0 && m_star.Y == 0.0)
     {
         Debug.AddLine("UpdateCurrentPosition: no star selected");
-        errorInfo->starError = Star::STAR_ERROR;
-        errorInfo->starMass = 0.0;
-        errorInfo->starSNR = 0.0;
-        errorInfo->status = _("No star selected");
+        statusMessage = _("No star selected");
         return true;
     }
 
@@ -545,38 +410,48 @@ bool GuiderOneStar::UpdateCurrentPosition(usImage *pImage, FrameDroppedInfo *err
     {
         Star newStar(m_star);
 
-        if (!newStar.Find(pImage, m_searchRegion, pFrame->GetStarFindMode()))
+        if (!newStar.Find(pImage, m_searchRegion))
         {
-            errorInfo->starError = newStar.GetError();
-            errorInfo->starMass = 0.0;
-            errorInfo->starSNR = 0.0;
-            errorInfo->status = StarStatusStr(newStar);
+            statusMessage = StarStatusStr(newStar);
             m_star.SetError(newStar.GetError());
             throw ERROR_INFO("UpdateCurrentPosition():newStar not found");
         }
 
-        // check to see if it seems like the star we just found was the
-        // same as the original star.  We do this by comparing the
-        // mass
-        m_massChecker->SetExposure(pFrame->RequestedExposureDuration());
-        double limits[3];
         if (m_massChangeThresholdEnabled &&
-            m_massChecker->CheckMass(newStar.Mass, m_massChangeThreshold, limits))
+            m_star.Mass > 0.0 &&
+            newStar.Mass > 0.0 &&
+            m_badMassCount++ < 2)
         {
-            m_star.SetError(Star::STAR_MASSCHANGE);
-            errorInfo->starError = Star::STAR_MASSCHANGE;
-            errorInfo->starMass = newStar.Mass;
-            errorInfo->starSNR = newStar.SNR;
-            errorInfo->status = StarStatusStr(m_star);
-            pFrame->SetStatusText(wxString::Format(_("Mass: %.0f vs %.0f"), newStar.Mass, limits[1]), 1);
-            Debug.Write(wxString::Format("UpdateGuideState(): star mass new=%.1f exp=%.1f thresh=%.0f%% range=(%.1f, %.1f)\n", newStar.Mass, limits[1], m_massChangeThreshold * 100, limits[0], limits[2]));
-            m_massChecker->AppendData(newStar.Mass);
-            throw THROW_INFO("massChangeThreshold error");
+            // check to see if it seems like the star we just found was the
+            // same as the orignial star.  We do this by comparing the
+            // mass
+            double massRatio;
+
+            if (newStar.Mass > m_star.Mass)
+            {
+                massRatio = m_star.Mass / newStar.Mass;
+            }
+            else
+            {
+                massRatio = newStar.Mass / m_star.Mass;
+            }
+
+            massRatio = 1.0 - massRatio;
+
+            assert(massRatio >= 0.0 && massRatio < 1.0);
+
+            if (massRatio > m_massChangeThreshold)
+            {
+                m_star.SetError(Star::STAR_MASSCHANGE);
+                pFrame->SetStatusText(wxString::Format(_("Mass: %.0f vs %.0f"), newStar.Mass, m_star.Mass), 1);
+                Debug.Write(wxString::Format("UpdateGuideState(): star mass ratio=%.1f, thresh=%.1f new=%.1f, old=%.1f\n", massRatio, m_massChangeThreshold, newStar.Mass, m_star.Mass));
+                throw THROW_INFO("massChangeThreshold error");
+            }
         }
 
         // update the star position, mass, etc.
         m_star = newStar;
-        m_massChecker->AppendData(newStar.Mass);
+        m_badMassCount = 0;
 
         const PHD_Point& lockPos = LockPosition();
         if (lockPos.IsValid())
@@ -589,7 +464,7 @@ bool GuiderOneStar::UpdateCurrentPosition(usImage *pImage, FrameDroppedInfo *err
 
         pFrame->AdjustAutoExposure(m_star.SNR);
 
-        errorInfo->status.Printf(_T("m=%.0f SNR=%.1f"), m_star.Mass, m_star.SNR);
+        statusMessage.Printf(_T("m=%.0f SNR=%.1f"), m_star.Mass, m_star.SNR);
     }
     catch (wxString Msg)
     {
@@ -675,7 +550,6 @@ void GuiderOneStar::OnLClick(wxMouseEvent &mevent)
                 EvtServer.NotifyStarSelected(CurrentPosition());
                 SetState(STATE_SELECTED);
                 pFrame->UpdateButtonsStatus();
-                pFrame->pProfile->UpdateData(pImage, m_star.X, m_star.Y);
             }
 
             Refresh();
@@ -692,7 +566,7 @@ inline static void DrawBox(wxClientDC& dc, const PHD_Point& star, int halfW, dou
 {
     dc.SetBrush(*wxTRANSPARENT_BRUSH);
     double w = ROUND((halfW * 2 + 1) * scale);
-    dc.DrawRectangle(int((star.X - halfW) * scale), int((star.Y - halfW) * scale), w, w);
+    dc.DrawRectangle(ROUND((star.X - halfW) * scale), ROUND((star.Y - halfW) * scale), w, w);
 }
 
 // Define the repainting behaviour
@@ -720,7 +594,7 @@ void GuiderOneStar::OnPaint(wxPaintEvent& event)
             for (std::vector<wxRealPoint>::const_iterator it = m_bookmarks.begin();
                  it != m_bookmarks.end(); ++it)
             {
-                wxPoint p((int)(it->x * m_scaleFactor), (int)(it->y * m_scaleFactor));
+                wxPoint p((int) (it->x * m_scaleFactor), (int)(it->y * m_scaleFactor));
                 dc.DrawCircle(p, 3);
                 dc.DrawCircle(p, 6);
                 dc.DrawCircle(p, 12);
@@ -730,27 +604,27 @@ void GuiderOneStar::OnPaint(wxPaintEvent& event)
         GUIDER_STATE state = GetState();
         bool FoundStar = m_star.WasFound();
 
-        if (state == STATE_SELECTED)
+        if (state == STATE_SELECTED /*|| IsPaused()*/)
         {
             if (FoundStar)
-                dc.SetPen(wxPen(wxColour(100,255,90), 1, wxSOLID));  // Draw the box around the star
+                dc.SetPen(wxPen(wxColour(100,255,90),1,wxSOLID ));  // Draw the box around the star
             else
-                dc.SetPen(wxPen(wxColour(230,130,30), 1, wxDOT));
+                dc.SetPen(wxPen(wxColour(230,130,30),1,wxDOT ));
             DrawBox(dc, m_star, m_searchRegion, m_scaleFactor);
         }
         else if (state == STATE_CALIBRATING_PRIMARY || state == STATE_CALIBRATING_SECONDARY)
         {
             // in the calibration process
-            dc.SetPen(wxPen(wxColour(32,196,32), 1, wxSOLID));  // Draw the box around the star
+            dc.SetPen(wxPen(wxColour(32,196,32),1,wxSOLID ));  // Draw the box around the star
             DrawBox(dc, m_star, m_searchRegion, m_scaleFactor);
         }
         else if (state == STATE_CALIBRATED || state == STATE_GUIDING)
         {
             // locked and guiding
             if (FoundStar)
-                dc.SetPen(wxPen(wxColour(32,196,32), 1, wxSOLID));  // Draw the box around the star
+                dc.SetPen(wxPen(wxColour(32,196,32),1,wxSOLID ));  // Draw the box around the star
             else
-                dc.SetPen(wxPen(wxColour(230,130,30), 1, wxDOT));
+                dc.SetPen(wxPen(wxColour(230,130,30),1,wxDOT ));
             DrawBox(dc, m_star, m_searchRegion, m_scaleFactor);
         }
 
@@ -836,9 +710,8 @@ void GuiderOneStar::SaveStarFITS()
     fsize[0] = 60;
     fsize[1] = 60;
     fsize[2] = 0;
-    PHD_fits_create_file(&fptr, fname, false, &status);
-    if (!status)
-    {
+    fits_create_file(&fptr,(const char*) fname.mb_str(wxConvUTF8),&status);
+    if (!status) {
         fits_create_img(fptr,output_format, 2, fsize, &status);
 
         time_t now;
@@ -910,7 +783,7 @@ GuiderOneStar::GuiderOneStarConfigDialogPane::GuiderOneStarConfigDialogPane(wxWi
 
     width = StringWidth(_T("0000"));
     m_pSearchRegion = new wxSpinCtrl(pParent, wxID_ANY, _T("foo2"), wxPoint(-1,-1),
-                                     wxSize(width+30, -1), wxSP_ARROW_KEYS, MIN_SEARCH_REGION, MAX_SEARCH_REGION, DEFAULT_SEARCH_REGION, _T("Search"));
+            wxSize(width+30, -1), wxSP_ARROW_KEYS, 10, 50, 15, _T("Search"));
     DoAdd(_("Search region (pixels)"), m_pSearchRegion,
           _("How many pixels (up/down/left/right) do we examine to find the star? Default = 15"));
 

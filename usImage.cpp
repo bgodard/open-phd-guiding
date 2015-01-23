@@ -40,29 +40,19 @@ bool usImage::Init(const wxSize& size)
     // Allocates space for image and sets params up
     // returns true on error
 
-    int prev = NPixels;
+    if (ImageData) {
+        delete[] ImageData;
+        ImageData = NULL;
+    }
+
     NPixels = size.GetWidth() * size.GetHeight();
     Size = size;
     Subframe = wxRect(0, 0, 0, 0);
     Min = Max = 0;
-
-    if (NPixels != prev)
-    {
-        delete[] ImageData;
-
-        if (NPixels)
-        {
-            ImageData = new unsigned short[NPixels];
-            if (!ImageData)
-            {
-                NPixels = 0;
-                return true;
-            }
-        }
-        else
-            ImageData = NULL;
+    if (NPixels) {
+        ImageData = new unsigned short[NPixels];
+        if (!ImageData) return true;
     }
-
     return false;
 }
 
@@ -152,9 +142,13 @@ bool usImage::CopyToImage(wxImage **rawimg, int blevel, int wlevel, double power
 {
     wxImage *img = *rawimg;
 
-    if (!img || !img->Ok() || (img->GetWidth() != Size.GetWidth()) || (img->GetHeight() != Size.GetHeight()) ) // can't reuse bitmap
+    if (!img->Ok() || (img->GetWidth() != Size.GetWidth()) || (img->GetHeight() != Size.GetHeight()) ) // can't reuse bitmap
     {
-        delete img;
+        if (img->Ok())
+        {
+            delete img;  // Clear out current image if it exists
+            img = (wxImage *) NULL;
+        }
         img = new wxImage(Size.GetWidth(), Size.GetHeight(), false);
     }
 
@@ -163,11 +157,11 @@ bool usImage::CopyToImage(wxImage **rawimg, int blevel, int wlevel, double power
 
     if (power == 1.0 || blevel >= wlevel)
     {
-        float range = (float) wxMax(1, wlevel);  // Go 0-max
+        float range = wlevel;  // Go 0-max
         for (int i = 0; i < NPixels; i++, RawPtr++)
         {
             float d;
-            if (*RawPtr >= range)
+            if (*RawPtr >= wlevel)
                 d = 255.0;
             else
                 d = ((float) (*RawPtr) / range) * 255.0;
@@ -202,8 +196,7 @@ bool usImage::CopyToImage(wxImage **rawimg, int blevel, int wlevel, double power
     return false;
 }
 
-bool usImage::BinnedCopyToImage(wxImage **rawimg, int blevel, int wlevel, double power)
-{
+bool usImage::BinnedCopyToImage(wxImage **rawimg, int blevel, int wlevel, double power) {
     wxImage *img;
     unsigned char *ImgPtr;
     unsigned short *RawPtr;
@@ -306,7 +299,7 @@ bool usImage::Save(const wxString& fname, const wxString& hdrNote) const
         fitsfile *fptr;  // FITS file pointer
         int status = 0;  // CFITSIO status value MUST be initialized to zero!
 
-        PHD_fits_create_file(&fptr, fname, true, &status);
+        fits_create_file(&fptr, (_T("!") + fname).mb_str(wxConvUTF8), &status);
         if (!status) fits_create_img(fptr, USHORT_IMG, 2, fsize, &status);
 
         float exposure = (float) ImgExpDur / 1000.0;
@@ -319,7 +312,7 @@ bool usImage::Save(const wxString& fname, const wxString& hdrNote) const
             keyname = const_cast<char *>("STACKCNT");
             comment = const_cast<char *>("Stacked frame count");
             unsigned int stackcnt = ImgStackCnt;
-            if (!status) fits_write_key(fptr, TUINT, keyname, &stackcnt, comment, &status);
+            fits_write_key(fptr, TUINT, keyname, &stackcnt, comment, &status);
         }
 
         if (!hdrNote.IsEmpty())
@@ -330,8 +323,12 @@ bool usImage::Save(const wxString& fname, const wxString& hdrNote) const
 
         if (!status) fits_write_pix(fptr, TUSHORT, fpixel, NPixels, ImageData, &status);
         fits_close_file(fptr, &status);
-
         bError = status ? true : false;
+
+        if (bError)
+            pFrame->SetStatusText(wxString::Format(_("%s Not saved"), fname));
+        else
+            pFrame->SetStatusText(wxString::Format(_("%s saved"), fname));
     }
     catch (wxString Msg)
     {
@@ -356,7 +353,7 @@ bool usImage::Load(const wxString& fname)
 
         int status = 0;  // CFITSIO status value MUST be initialized to zero!
         fitsfile *fptr;  // FITS file pointer
-        if (!PHD_fits_open_diskfile(&fptr, fname, READONLY, &status))
+        if (!fits_open_diskfile(&fptr, fname.c_str(), READONLY, &status))
         {
             int hdutype;
             if (fits_get_hdu_type(fptr, &hdutype, &status) || hdutype != IMAGE_HDU)
@@ -418,17 +415,9 @@ bool usImage::Load(const wxString& fname)
     return bError;
 }
 
-bool usImage::CopyFrom(const usImage& src)
-{
-    if (Init(src.Size))
-        return true;
-    memcpy(ImageData, src.ImageData, NPixels * sizeof(unsigned short));
-    return false;
-}
-
 bool usImage::Rotate(double theta, bool mirror)
 {
-    wxImage *pImg = 0;
+    wxImage *pImg = new wxImage();
 
     CalcStats();
 
@@ -450,16 +439,30 @@ bool usImage::Rotate(double theta, bool mirror)
     return false;
 }
 
-bool usImage::CopyFromImage(const wxImage& img)
+bool usImage::CopyFromImage(const wxImage &img)
 {
-    Init(img.GetSize());
+    Init(img.GetWidth(), img.GetHeight());
 
-    const unsigned char *pSrc = img.GetData();
+    unsigned char *pSrc = img.GetData();
     unsigned short *pDest = ImageData;
 
-    for (int i = 0; i < NPixels; i++)
+    for (int i=0; i<NPixels;i++)
     {
-        *pDest++ = ((unsigned short) *pSrc) << 8;
+        double val = *pSrc;
+
+        val *=255.0;
+
+        if (val < 0)
+        {
+            val = 0.0;
+        }
+        else if (val > 65535.0)
+        {
+            val = 65535;
+        }
+
+        *pDest++ = (unsigned short)val;
+
         pSrc += 3;
     }
 

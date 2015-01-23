@@ -40,28 +40,9 @@
 class DispatchObj;
 class DispatchClass;
 
-class Camera_ASCOMLateClass : public GuideCamera
+class Camera_ASCOMLateClass : public GuideCamera, protected ASCOM_COMMON
 {
-#ifdef __WINDOWS__
-
-    GITEntry m_gitEntry;
-    int DriverVersion;
-    wxString m_choice; // name of chosen camera
-    wxRect m_roi;
-    bool m_canAbortExposure;
-    bool m_canStopExposure;
-
-#endif // __WINDOWS__
-
 public:
-
-    bool Color;
-
-    static wxArrayString EnumAscomCameras();
-
-    Camera_ASCOMLateClass(const wxString& choice);
-    ~Camera_ASCOMLateClass();
-
     virtual bool Capture(int duration, usImage& img, wxRect subframe = wxRect(0,0,0,0), bool recon=false);
     virtual bool HasNonGuiCapture(void);
     bool    Connect(void);
@@ -69,19 +50,41 @@ public:
     void    ShowPropertyDialog(void);
     bool    ST4PulseGuideScope(int direction, int duration);
 
-private:
+    bool    Color;
 
+    Camera_ASCOMLateClass(const wxString& choice);
+    ~Camera_ASCOMLateClass();
+    static wxArrayString EnumAscomCameras();
+
+private:
 #ifdef __WINDOWS__
+    IGlobalInterfaceTable* m_pIGlobalInterfaceTable;
+    DWORD m_dwCookie;
+    DISPID dispid_setxbin, dispid_setybin;  // Frequently used IDs
+    DISPID dispid_startx, dispid_starty;
+    DISPID dispid_numx, dispid_numy;
+    DISPID dispid_startexposure, dispid_stopexposure;
+    DISPID dispid_imageready, dispid_imagearray;
+    DISPID dispid_ispulseguiding, dispid_pulseguide;
 
     bool Create(DispatchObj *obj, DispatchClass *cls);
 
-    bool AbortExposure(void);
+    bool ASCOM_SetBin(int mode, EXCEPINFO *excep);
+    bool ASCOM_SetROI(int startx, int starty, int numx, int numy, EXCEPINFO *excep);
+    bool ASCOM_StartExposure(double duration, bool light, EXCEPINFO *excep);
+    bool ASCOM_StopExposure(EXCEPINFO *excep);
+    bool ASCOM_ImageReady(bool *ready, EXCEPINFO *excep);
+    bool ASCOM_Image(usImage& Image, bool useSubframe, wxRect subframe, EXCEPINFO *excep);
+    bool ASCOM_IsMoving(void);
 
     bool ST4HasNonGuiMove(void);
 
+    int DriverVersion;
+
+    wxString m_choice; // name of chosen camera
+
 #endif
 };
-
 #endif // defined (ASCOM_LATECAMERA)
 
 #endif //CAM_ASCOMLATE_H_INCLUDED

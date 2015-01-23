@@ -38,16 +38,13 @@
 
 #include <openssag.h>
 
-class Camera_OpenSSAGClass : public GuideCamera
-{
+class Camera_OpenSSAGClass : public GuideCamera {
 public:
-    bool Capture(int duration, usImage& img, wxRect subframe = wxRect(0,0,0,0), bool recon=false);
+    virtual bool    Capture(int duration, usImage& img, wxRect subframe = wxRect(0,0,0,0), bool recon=false);
     bool Connect();
     bool Disconnect();
     bool ST4PulseGuideScope(int direction, int duration);
     Camera_OpenSSAGClass();
-    bool HasNonGuiCapture(void) { return true; }
-    bool ST4HasNonGuiMove(void) { return true; }
 private:
     OpenSSAG::SSAG *ssag;
 };

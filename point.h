@@ -219,7 +219,7 @@ class ShiftPoint : public PHD_Point
     PHD_Point m_rate; // rate of change (per second)
     double m_x0;    // initial x position
     double m_y0;    // initial y position
-    wxLongLong_t m_t0;      // initial time (seconds)
+    long m_t0;      // initial time (seconds)
 
 public:
 
@@ -237,7 +237,7 @@ public:
         {
             m_x0 = X;
             m_y0 = Y;
-            m_t0 = ::wxGetUTCTimeMillis().GetValue();
+            m_t0 = ::wxGetUTCTime();
         }
     }
 
@@ -250,7 +250,7 @@ public:
     {
         if (IsValid() && m_rate.IsValid())
         {
-            double dt = (double)(::wxGetUTCTimeMillis().GetValue() - m_t0) / 1000.;
+            double dt = (double)(::wxGetUTCTime() - m_t0);
             X = m_x0 + m_rate.X * dt;
             Y = m_y0 + m_rate.Y * dt;
         }

@@ -62,7 +62,7 @@ static void AddTableEntryPair(wxWindow *parent, wxFlexGridSizer *pTable, const w
 }
 
 RefineDefMap::RefineDefMap(wxWindow *parent) :
-wxDialog(parent, wxID_ANY, _("Refine Bad-pixel Map"), wxDefaultPosition, wxSize(900, 400), wxCAPTION | wxCLOSE_BOX), m_profileId(-1)
+    wxDialog(parent, wxID_ANY, _("Refine Bad-pixel Map"), wxDefaultPosition, wxSize(900, 400), wxCAPTION | wxCLOSE_BOX)
 {
     SetSize(wxSize(900, 400));
 
@@ -205,15 +205,12 @@ wxDialog(parent, wxID_ANY, _("Refine Bad-pixel Map"), wxDefaultPosition, wxSize(
     ShowStatus(_("Adjust sliders to increase/decrease pixels marked as bad"), false);
 }
 
-bool RefineDefMap::InitUI()
+void RefineDefMap::InitUI()
 {
-    // change the star finding mode to select peaks, not centroids
-    m_saveStarFindMode = pFrame->SetStarFindMode(Star::FIND_PEAK);
-
     if (pConfig->GetCurrentProfileId() == m_profileId)
     {
         RefreshPreview();
-        return true;
+        return;
     }
 
     bool firstTime = false;
@@ -229,14 +226,13 @@ bool RefineDefMap::InitUI()
         LoadFromProfile();
         if (firstTime)
             ApplyNewMap();
-        RefreshPreview();
-        return true;
     }
     else
     {
-        return false;      // No master dark files to work with, user didn't build them
+        Destroy();      // No master dark files to work with, user didn't build them
     }
 
+    RefreshPreview();
 }
 
 // Do the initial layout of the UI controls
@@ -422,13 +418,10 @@ void RefineDefMap::OnAddDefect(wxCommandEvent& evt)
             DefectMap *pCurrMap = pCamera->CurrentDefectMap;
             if (pCurrMap)
             {
-                if (!pCurrMap->FindDefect(badspot))
-                {
-                    pCurrMap->AddDefect(badspot);           // Changes both in-memory instance and disk file
-                    manualPixelCount++;
-                    pStatsGrid->SetCellValue(manualPixelLoc, wxString::Format("%d", manualPixelCount));
-                    needLoadPreview = true;
-                }
+                pCurrMap->AddDefect(badspot);           // Changes both in-memory instance and disk file
+                manualPixelCount++;
+                pStatsGrid->SetCellValue(manualPixelLoc, wxString::Format("%d", manualPixelCount));
+                needLoadPreview = true;
             }
             else
                 ShowStatus(_("You must first load a bad-pixel map"), false);
@@ -497,7 +490,6 @@ void RefineDefMap::OnDetails(wxCommandEvent& ev)
 // Hook the close event to tweak setting of 'build defect map' menu - mutual exclusion for now
 void RefineDefMap::OnClose(wxCloseEvent& evt)
 {
-    pFrame->SetStarFindMode(m_saveStarFindMode);
     pFrame->pGuider->SetDefectMapPreview(0);
     pFrame->darks_menu->FindItem(MENU_TAKEDARKS)->Enable(!pFrame->CaptureActive);
     pConfig->Profile.SetBoolean("/camera/dmap_show_details", pShowDetails->GetValue());

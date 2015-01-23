@@ -40,7 +40,7 @@
 #endif
 class Camera_StarfishClass : public GuideCamera {
 public:
-    bool    Capture(int duration, usImage& img, wxRect subframe = wxRect(0,0,0,0), bool recon=false);
+    virtual bool    Capture(int duration, usImage& img, wxRect subframe = wxRect(0,0,0,0), bool recon=false);
     bool    Connect();
     bool    Disconnect();
     void    InitCapture();
@@ -49,8 +49,6 @@ public:
     bool    ST4PulseGuideScope(int direction, int duration);
 //  void    ClearGuidePort();
 
-    bool    HasNonGuiCapture(void) { return true; }
-    bool    ST4HasNonGuiMove(void) { return true; }
 
     Camera_StarfishClass();
 private:
@@ -58,7 +56,7 @@ private:
     int CamNum;
     int NCams;
     bool DriverLoaded;
-    usImage subImage;
-    wxRect lastSubFrame;
+    virtual bool HasNonGuiCapture(void) { return true; }
+    virtual bool    ST4HasNonGuiMove(void) { return true; }
 };
 #endif  //STARFISHDEF

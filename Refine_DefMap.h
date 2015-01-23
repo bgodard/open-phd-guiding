@@ -82,12 +82,11 @@ class RefineDefMap : public wxDialog
     long initHotFactor;
     long initColdFactor;
     int manualPixelCount;
-    Star::FindMode m_saveStarFindMode;
 
 public:
     RefineDefMap(wxWindow *pParent);
     ~RefineDefMap();
-    bool InitUI();
+    void InitUI();
 
 private:
     void LoadFromProfile();

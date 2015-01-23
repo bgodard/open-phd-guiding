@@ -33,10 +33,7 @@
  */
 
 #include "phd.h"
-
 #include <wx/cmdline.h>
-#include <wx/snglinst.h>
-
 #ifdef  __LINUX__
     #include <X11/Xlib.h>
 #endif // __LINUX__
@@ -97,23 +94,11 @@ PhdApp::PhdApp(void)
 #endif // __LINUX__
 };
 
-bool PhdApp::OnInit()
-{
+bool PhdApp::OnInit() {
     if (!wxApp::OnInit())
     {
         return false;
     }
-
-    m_instanceChecker = new wxSingleInstanceChecker(wxString::Format("%s.%ld", GetAppName(), m_instanceNumber));
-    if (m_instanceChecker->IsAnotherRunning())
-    {
-        wxLogError(wxString::Format(_("PHD2 instance %ld is already running. Use the "
-            "-i INSTANCE_NUM command-line option to start a different instance."), m_instanceNumber));
-        delete m_instanceChecker; // OnExit() won't be called if we return false
-        m_instanceChecker = 0;
-        return false;
-    }
-
 #ifndef DEBUG
     #if (wxMAJOR_VERSION > 2 || wxMINOR_VERSION > 8)
     wxDisableAsserts();
@@ -147,7 +132,7 @@ bool PhdApp::OnInit()
 
     wxLocale::AddCatalogLookupPathPrefix(_T("locale"));
     m_locale.Init(pConfig->Global.GetInt("/wxLanguage", wxLANGUAGE_DEFAULT));
-    if (!m_locale.AddCatalog(PHD_MESSAGES_CATALOG))
+    if (!m_locale.AddCatalog("messages"))
     {
         Debug.AddLine("locale.AddCatalog failed");
     }
@@ -164,11 +149,6 @@ bool PhdApp::OnInit()
 
     pFrame->Show(true);
 
-    if (pConfig->IsNewInstance())
-    {
-        pFrame->pGearDialog->ShowProfileWizard();
-    }
-
     return true;
 }
 
@@ -182,9 +162,6 @@ int PhdApp::OnExit(void)
 
     delete pConfig;
     pConfig = NULL;
-
-    delete m_instanceChecker; // OnExit() won't be called if we return false
-    m_instanceChecker = 0;
 
     return wxApp::OnExit();
 }
