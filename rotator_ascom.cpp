@@ -78,14 +78,14 @@ wxArrayString RotatorAscom::EnumAscomRotators(void)
         if (!profile.Create(L"ASCOM.Utilities.Profile"))
             throw ERROR_INFO("ASCOM Rotator: could not instantiate ASCOM profile class ASCOM.Utilities.Profile. Is ASCOM installed?");
 
-        Variant res;
+        VARIANT res;
         if (!profile.InvokeMethod(&res, L"RegisteredDevices", L"Rotator"))
             throw ERROR_INFO("ASCOM Rotator: could not query registered rotator devices: " + ExcepMsg(profile.Excep()));
 
         DispatchClass ilist_class;
         DispatchObj ilist(res.pdispVal, &ilist_class);
 
-        Variant vcnt;
+        VARIANT vcnt;
         if (!ilist.GetProp(&vcnt, L"Count"))
             throw ERROR_INFO("ASCOM Rotator: could not query registered rotators: " + ExcepMsg(ilist.Excep()));
 
@@ -97,11 +97,11 @@ wxArrayString RotatorAscom::EnumAscomRotators(void)
 
         for (unsigned int i = 0; i < count; i++)
         {
-            Variant kvpres;
+            VARIANT kvpres;
             if (ilist.GetProp(&kvpres, L"Item", i))
             {
                 DispatchObj kvpair(kvpres.pdispVal, &kvpair_class);
-                Variant vkey, vval;
+                VARIANT vkey, vval;
                 if (kvpair.GetProp(&vkey, L"Key") && kvpair.GetProp(&vval, L"Value"))
                 {
                     wxString ascomName = vval.bstrVal;
@@ -140,7 +140,7 @@ static bool ChooseASCOMRotator(BSTR *res)
     wxString progId = pConfig->Profile.GetString("/rotator/ascom/progid", wxEmptyString);
     BSTR bstrProgId = wxBasicString(progId).Get();
 
-    Variant vchoice;
+    VARIANT vchoice;
     if (!chooser.InvokeMethod(&vchoice, L"Choose", bstrProgId))
     {
         wxMessageBox(_("Failed to run the Rotator Chooser. Something is wrong with ASCOM"), _("Error"), wxOK | wxICON_ERROR);
@@ -236,7 +236,7 @@ bool RotatorAscom::Connect(void)
         return true;
     }
 
-    Variant vname;
+    VARIANT vname;
     if (driver.GetProp(&vname, L"Name"))
     {
         m_impl->m_name = vname.bstrVal;
@@ -273,7 +273,7 @@ void RotatorAscom::ShowPropertyDialog(void)
 
     if (m_impl->Create(&rot, NULL))
     {
-        Variant res;
+        VARIANT res;
         if (!rot.InvokeMethod(&res, L"SetupDialog"))
         {
             pFrame->Alert(ExcepMsg(rot.Excep()));
@@ -290,7 +290,7 @@ float RotatorAscom::Position(void) const
 {
     GITObjRef rot(m_impl->m_gitEntry);
 
-    Variant vRes;
+    VARIANT vRes;
     if (!rot.GetProp(&vRes, L"Position"))
     {
         pFrame->Alert(ExcepMsg(_("ASCOM driver problem -- cannot get rotator position"), rot.Excep()));

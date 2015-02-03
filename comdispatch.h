@@ -39,13 +39,6 @@
 wxString ExcepMsg(const EXCEPINFO& excep);
 wxString ExcepMsg(const wxString& prefix, const EXCEPINFO& excep);
 
-struct Variant : public VARIANT
-{
-    Variant() { VariantInit(this); }
-};
-
-typedef Variant VariantArg;
-
 class DispatchClass
 {
     typedef std::map<wxString, DISPID> idmap_t;
@@ -70,16 +63,16 @@ public:
     void Attach(IDispatch *idisp, DispatchClass *cls);
     bool Create(OLECHAR *progid);
     bool GetDispatchId(DISPID *ret, OLECHAR *name);
-    bool GetProp(Variant *res, DISPID dispid);
-    bool GetProp(Variant *res, OLECHAR *name);
-    bool GetProp(Variant *res, OLECHAR *name, int arg);
+    bool GetProp(VARIANT *res, DISPID dispid);
+    bool GetProp(VARIANT *res, OLECHAR *name);
+    bool GetProp(VARIANT *res, OLECHAR *name, int arg);
     bool PutProp(OLECHAR *name, OLECHAR *val);
     bool PutProp(DISPID dispid, bool val);
     bool PutProp(OLECHAR *name, bool val);
-    bool InvokeMethod(Variant *res, OLECHAR *name);
-    bool InvokeMethod(Variant *res, OLECHAR *name, OLECHAR *arg);
-    bool InvokeMethod(Variant *res, DISPID dispid, double arg1, double arg2);
-    bool InvokeMethod(Variant *res, DISPID dispid);
+    bool InvokeMethod(VARIANT *res, OLECHAR *name);
+    bool InvokeMethod(VARIANT *res, OLECHAR *name, OLECHAR *arg);
+    bool InvokeMethod(VARIANT *res, DISPID dispid, double arg1, double arg2);
+    bool InvokeMethod(VARIANT *res, DISPID dispid);
     const EXCEPINFO& Excep() const { return m_excep; }
     IDispatch *IDisp() const { return m_idisp; }
 };

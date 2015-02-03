@@ -211,9 +211,9 @@ void Camera_INDIClass::newProperty(INDI::Property *property)
 	pulseW_prop = IUFindNumber(pulseGuideEW_prop,"TIMED_GUIDE_W");
 	pulseE_prop = IUFindNumber(pulseGuideEW_prop,"TIMED_GUIDE_E");
     }
-    else if (strcmp(PropName, INDICameraCCDCmd+"INFO") == 0 && Proptype == INDI_NUMBER) {
+    else if (strcmp(PropName, "CCD_INFO") == 0 && Proptype == INDI_NUMBER) {
         PixelSize = IUFindNumber(property->getNumber(),"CCD_PIXEL_SIZE")->value;
-	FullSize = wxSize(IUFindNumber(property->getNumber(),"CCD_MAX_X")->value,IUFindNumber(property->getNumber(),"CCD_MAX_Y")->value);
+	FullSize = wxSize(IUFindNumber(property->getNumber(),"CCD_MAX_Y")->value,IUFindNumber(property->getNumber(),"CCD_MAX_X")->value);
     }
     
     CheckState();
@@ -383,7 +383,7 @@ bool Camera_INDIClass::ReadFITS(usImage& img)
     long fits_size[2];
     long fpixel[3] = {1,1,1};
     size_t bsize = static_cast<size_t>(cam_bp->bloblen);
-
+    
     // load blob to CFITSIO
     if (fits_open_memfile(&fptr,
             "",
@@ -399,7 +399,6 @@ bool Camera_INDIClass::ReadFITS(usImage& img)
     }
     if (fits_get_hdu_type(fptr, &hdutype, &status) || hdutype != IMAGE_HDU) {
         pFrame->Alert(_("FITS file is not of an image"));
-        PHD_fits_close_file(fptr);
         return true;
     }
 
@@ -411,21 +410,18 @@ bool Camera_INDIClass::ReadFITS(usImage& img)
     fits_get_num_hdus(fptr,&nhdus,&status);
     if ((nhdus != 1) || (naxis != 2)) {
         pFrame->Alert(_("Unsupported type or read error loading FITS file"));
-        PHD_fits_close_file(fptr);
         return true;
     }
     if (img.Init(xsize,ysize)) {
         pFrame->Alert(_("Memory allocation error"));
-        PHD_fits_close_file(fptr);
         return true;
     }
     // Read image
     if (fits_read_pix(fptr, TUSHORT, fpixel, xsize*ysize, NULL, img.ImageData, NULL, &status) ) { 
         pFrame->Alert(_("Error reading data"));
-        PHD_fits_close_file(fptr);
         return true;
     }
-    PHD_fits_close_file(fptr);
+    fits_close_file(fptr,&status);
     return false;
 }
 

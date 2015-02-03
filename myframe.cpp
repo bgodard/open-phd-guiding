@@ -854,7 +854,8 @@ void MyFrame::SetupHelpFile(void)
     bool retval;
     wxString filename;
     // first try to find locale-specific help file
-    filename = wxGetApp().GetLocaleDir() + wxFILE_SEP_PATH
+    filename = wxStandardPaths::Get().GetResourcesDir() + wxFILE_SEP_PATH
+        + _T("locale") + wxFILE_SEP_PATH
         + wxLocale::GetLanguageCanonicalName(m_pLocale->GetLanguage()) + wxFILE_SEP_PATH
         + _T("PHD2GuideHelp.zip");
     if (!wxFileExists(filename))
@@ -1650,7 +1651,7 @@ static bool save_multi_darks(const ExposureImgMap& darks, const wxString& fname,
             Debug.AddLine("saving dark frame exposure = %d", img->ImgExpDur);
         }
 
-        PHD_fits_close_file(fptr);
+        fits_close_file(fptr, &status);
         bError = status ? true : false;
     }
     catch (wxString Msg)
@@ -1753,7 +1754,7 @@ static bool load_multi_darks(GuideCamera *camera, const wxString& fname)
 
     if (fptr)
     {
-        PHD_fits_close_file(fptr);
+        fits_close_file(fptr, &status);
     }
 
     return bError;
@@ -1770,49 +1771,13 @@ wxString MyFrame::GetDarksDir()
 
 static wxString DarkLibFileName(int profileId)
 {
-    int inst = pFrame->GetInstanceNumber();
-    return MyFrame::GetDarksDir() + PATHSEPSTR +
-        wxString::Format("PHD2_dark_lib%s_%d.fit", inst > 1 ? wxString::Format("_%d", inst) : "", profileId);
-}
-
-bool MyFrame::DarkLibExists(int profileId, bool showAlert)
-{
-    bool bOk = false;
-    wxString fileName = DarkLibFileName(profileId);
-
-    if (wxFileExists(fileName))
-    {
-        const wxSize& sensorSize = pCamera->FullSize;
-        if (sensorSize == UNDEFINED_FULL_FRAME_SIZE)
-        {
-            bOk = true;
-        }
-        else
-        {
-            fitsfile *fptr;
-            int status = 0;  // CFITSIO status value MUST be initialized to zero!
-
-            if (PHD_fits_open_diskfile(&fptr, fileName, READONLY, &status) == 0)
-            {
-                long fsize[2];
-                fits_get_img_size(fptr, 2, fsize, &status);
-                if (status == 0 && fsize[0] == sensorSize.x && fsize[1] == sensorSize.y)
-                    bOk = true;
-                else if (showAlert)
-                    Alert(_("Dark library does not match the camera in this profile - it needs to be rebuilt."));
-
-                PHD_fits_close_file(fptr);
-            }
-        }
-    }
-
-    return bOk;
+    return MyFrame::GetDarksDir() + PATHSEPSTR + wxString::Format("PHD2_dark_lib_%d.fit", profileId);
 }
 
 void MyFrame::SetDarkMenuState()
 {
     wxMenuItem *item = darks_menu->FindItem(MENU_LOADDARK);
-    bool haveDarkLib = DarkLibExists(pConfig->GetCurrentProfileId());
+    bool haveDarkLib = wxFileExists(DarkLibFileName(pConfig->GetCurrentProfileId()));
     item->Enable(haveDarkLib);
     if (!haveDarkLib)
         item->Check(false);
@@ -2118,10 +2083,8 @@ MyFrameConfigDialogPane::MyFrameConfigDialogPane(wxWindow *pParent, MyFrame *pFr
     {
         bool bLanguageNameOk = false;
         const wxLanguageInfo *pLanguageInfo = wxLocale::FindLanguageInfo(*s);
-#ifndef __LINUX__  // See issue 83
-        wxString catalogFile = wxGetApp().GetLocaleDir() +
-            PATHSEPSTR + pLanguageInfo->CanonicalName +
-            PATHSEPSTR "messages.mo";
+#ifdef __WINDOWS__
+        wxString catalogFile = "locale\\" + pLanguageInfo->CanonicalName + "\\messages.mo";
         wxMsgCatalog *pCat = wxMsgCatalog::CreateFromFile(catalogFile, "messages");
         if (pCat != NULL)
         {

@@ -880,7 +880,7 @@ void GuiderOneStar::SaveStarFITS()
         if (!status) fits_write_pix(fptr,TUSHORT,fpixel,tmpimg.NPixels,tmpimg.ImageData,&status);
 
     }
-    PHD_fits_close_file(fptr);
+    fits_close_file(fptr,&status);
 }
 
 wxString GuiderOneStar::GetSettingsSummary()

@@ -69,7 +69,7 @@
 
 #define APPNAME _T("PHD2 Guiding")
 #define PHDVERSION _T("2.4.1")
-#define PHDSUBVER _T("f")
+#define PHDSUBVER _T("c")
 #define FULLVER PHDVERSION PHDSUBVER
 
 #if defined (__WINDOWS__)
@@ -79,7 +79,7 @@
 #pragma warning(disable:4100)
 #pragma warning(disable:4996)
 
-#include <vld.h>
+//#include <vld.h>
 
 #endif
 
@@ -127,7 +127,7 @@ WX_DEFINE_ARRAY_DOUBLE(double, ArrayOfDbl);
 #include "../cfitsio/fitsio.h"
 #else
 #include "fitsio.h"
-#include <opencv/cv.h>
+//#include <opencv/cv.h>
 #endif
 
 #if defined (__WINDOWS__)
@@ -198,11 +198,6 @@ class PhdApp : public wxApp
     wxSingleInstanceChecker *m_instanceChecker;
     long m_instanceNumber;
     bool m_resetConfig;
-    wxString m_localeDir;
-
-protected:
-
-    wxLocale m_locale;
 
 public:
 
@@ -212,7 +207,10 @@ public:
     void OnInitCmdLine(wxCmdLineParser& parser);
     bool OnCmdLineParsed(wxCmdLineParser & parser);
     virtual bool Yield(bool onlyIfNeeded=false);
-    wxString GetLocaleDir() const { return m_localeDir; }
+
+protected:
+
+    wxLocale m_locale;
 };
 
 wxDECLARE_APP(PhdApp);

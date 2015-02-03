@@ -286,7 +286,6 @@ public:
     int GetInstanceNumber() const { return m_instanceNumber; }
     static wxString GetDefaultFileDir();
     static wxString GetDarksDir();
-    bool DarkLibExists(int profileId, bool showAlert = true);
     void LoadDarkLibrary();
     void SaveDarkLibrary(const wxString& note);
     void DeleteDarkLibraryFiles(int profileID);

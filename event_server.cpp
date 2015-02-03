@@ -523,7 +523,6 @@ static const json_value *at(const json_value *ary, unsigned int idx)
     {
         if (i == idx)
             return j;
-        ++i;
     }
     return 0;
 }

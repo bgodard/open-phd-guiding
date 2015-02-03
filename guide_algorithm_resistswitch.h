@@ -40,14 +40,12 @@
 #ifndef GUIDE_ALGORITHM_RESISTSWITCH_H_INCLUDED
 #define GUIDE_ALGORITHM_RESISTSWITCH_H_INCLUDED
 
-class GuideAlgorithmResistSwitch : public GuideAlgorithm
+class GuideAlgorithmResistSwitch:GuideAlgorithm
 {
     static const unsigned int HISTORY_SIZE = 10;
 
     ArrayOfDbl m_history;
     double m_minMove;
-    double m_aggression;
-    bool m_fastSwitchEnabled;
     int    m_currentSide;
 
 protected:
@@ -55,8 +53,6 @@ protected:
     {
         GuideAlgorithmResistSwitch *m_pGuideAlgorithm;
         wxSpinCtrlDouble *m_pMinMove;
-        wxSpinCtrlDouble *m_pAggression;
-        wxCheckBox *m_pFastSwitch;
 
     public:
         GuideAlgorithmResistSwitchConfigDialogPane(wxWindow *pParent, GuideAlgorithmResistSwitch *pGuideAlgorithm);
@@ -69,24 +65,18 @@ protected:
     class GuideAlgorithmResistSwitchGraphControlPane : public GraphControlPane
     {
     public:
-        GuideAlgorithmResistSwitchGraphControlPane(wxWindow *pParent, GuideAlgorithmResistSwitch *pGuideAlgorithm, const wxString& label);
+        GuideAlgorithmResistSwitchGraphControlPane(wxWindow *pParent, GuideAlgorithmResistSwitch *pGuideAlgorithm, wxString label);
         ~GuideAlgorithmResistSwitchGraphControlPane(void);
 
     private:
         GuideAlgorithmResistSwitch *m_pGuideAlgorithm;
         wxSpinCtrlDouble *m_pMinMove;
-        wxSpinCtrlDouble *m_pAggression;
 
         void OnMinMoveSpinCtrlDouble(wxSpinDoubleEvent& evt);
-        void OnAggressionSpinCtrlDouble(wxSpinDoubleEvent& evt);
     };
 
-    double GetMinMove(void) const;
-    bool SetMinMove(double minMove);
-    double GetAggression(void) const;
-    bool SetAggression(double aggr);
-    bool GetFastSwitchEnabled(void) const;
-    void SetFastSwitchEnabled(bool enable);
+    virtual double GetMinMove(void);
+    virtual bool SetMinMove(double minMove);
 
     friend class GuideAlgorithmResistSwitchConfigDialogPane;
 
@@ -102,20 +92,5 @@ public:
     virtual wxString GetSettingsSummary();
     virtual wxString GetGuideAlgorithmClassName(void) const { return "ResistSwitch"; }
 };
-
-inline double GuideAlgorithmResistSwitch::GetMinMove(void) const
-{
-    return m_minMove;
-}
-
-inline double GuideAlgorithmResistSwitch::GetAggression(void) const
-{
-    return m_aggression;
-}
-
-inline bool GuideAlgorithmResistSwitch::GetFastSwitchEnabled(void) const
-{
-    return m_fastSwitchEnabled;
-}
 
 #endif /* GUIDE_ALGORITHM_RESISTSWITCH_H_INCLUDED */

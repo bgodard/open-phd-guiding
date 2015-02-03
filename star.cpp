@@ -229,6 +229,9 @@ bool Star::Find(const usImage *pImg, int searchRegion, int base_x, int base_y, F
 
             Mass = mass;
 
+        /*
+         
+        Original Code: 
             if (mass < 10.0)
                 Result = STAR_LOWMASS;
             else if (SNR < 3.0)
@@ -242,7 +245,34 @@ bool Star::Find(const usImage *pImg, int searchRegion, int base_x, int base_y, F
                 if ((unsigned int)(max - nearmax2) * 65535U < 32U * (unsigned int) max)
                     Result = STAR_SATURATED;
             }
+            */
+
+
+	        // These modifications make it possible to find the Laser Point as a Star
+	        if (mass < 5.0) {
+	            Result = STAR_LOWMASS;
+	        }
+	        else if (SNR < 1.0) {
+	            Result = STAR_LOWSNR;
+	        }
+	        else {
+	            newX = mx / mass;
+	            newY = my / mass;
+	            if (max == nearmax2) {
+	                Result = STAR_SATURATED;
+	            }
+	        }
+
         }
+         
+         
+
+        
+        
+        
+        
+        
+        
     }
     catch (wxString Msg)
     {

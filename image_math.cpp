@@ -50,27 +50,32 @@ int dbl_sort_func (double *first, double *second)
     return 0;
 }
 
-double CalcSlope(const ArrayOfDbl& y)
+float CalcSlope(const ArrayOfDbl& y)
 {
     // Does a linear regression to calculate the slope
 
-    int nn = (int) y.GetCount();
+    int x, size;
+    double s_xy, s_x, s_y, s_xx, nvalid;
+    double retval;
+    size = (int) y.GetCount();
+    nvalid = 0.0;
+    s_xy = 0.0;
+    s_xx = 0.0;
+    s_x = 0.0;
+    s_y = 0.0;
 
-    double s_xy = 0.0;
-    double s_y = 0.0;
-
-    for (int x = 0; x < nn; x++)
-    {
-        s_xy += (double)(x + 1) * y[x];
-        s_y += y[x];
+    for (x=1; x<=size; x++) {
+        if (1) {
+            nvalid = nvalid + 1;
+            s_xy = s_xy + (double) x * y[x-1];
+            s_x = s_x + (double) x;
+            s_y = s_y + y[x-1];
+            s_xx = s_xx + (double) x * (double) x;
+        }
     }
 
-    int sx = (nn * (nn + 1)) / 2;
-    int sxx = sx * (2 * nn + 1) / 3;
-    double s_x = (double) sx;
-    double s_xx = (double) sxx;
-    double n = (double) nn;
-    return (n * s_xy - (s_x * s_y)) / (n * s_xx - (s_x * s_x));
+    retval = (nvalid * s_xy - (s_x * s_y)) / (nvalid * s_xx - (s_x * s_x));
+    return (float) retval;
 }
 
 bool QuickLRecon(usImage& img)
@@ -578,7 +583,7 @@ bool Subtract(usImage& light, const usImage& dark)
 {
     if ((!light.ImageData) || (!dark.ImageData))
         return true;
-    if (light.Size != dark.Size)
+    if (light.NPixels != dark.NPixels)
         return true;
 
     unsigned int left, top, width, height;
@@ -796,16 +801,12 @@ void DefectMapDarks::BuildFilteredDark()
 
 static wxString DefectMapMasterPath()
 {
-    int inst = pFrame->GetInstanceNumber();
-    return MyFrame::GetDarksDir() + PATHSEPSTR +
-        wxString::Format("PHD2_defect_map_master%s_%d.fit", inst > 1 ? wxString::Format("_%d", inst) : "", pConfig->GetCurrentProfileId());
+    return MyFrame::GetDarksDir() + PATHSEPSTR + wxString::Format("PHD2_defect_map_master_%d.fit", pConfig->GetCurrentProfileId());
 }
 
 static wxString DefectMapFilterPath()
 {
-    int inst = pFrame->GetInstanceNumber();
-    return MyFrame::GetDarksDir() + PATHSEPSTR +
-        wxString::Format("PHD2_defect_map_master_filt%s_%d.fit", inst > 1 ? wxString::Format("_%d", inst) : "", pConfig->GetCurrentProfileId());
+    return MyFrame::GetDarksDir() + PATHSEPSTR + wxString::Format("PHD2_defect_map_master_filt_%d.fit", pConfig->GetCurrentProfileId());
 }
 
 void DefectMapDarks::SaveDarks(const wxString& notes)
@@ -1069,43 +1070,12 @@ bool RemoveDefects(usImage& light, const DefectMap& defectMap)
 
 wxString DefectMap::DefectMapFileName(int profileId)
 {
-    int inst = pFrame->GetInstanceNumber();
-    return MyFrame::GetDarksDir() + PATHSEPSTR +
-        wxString::Format("PHD2_defect_map%s_%d.txt", inst > 1 ? wxString::Format("_%d", inst) : "", profileId);
+    return MyFrame::GetDarksDir() + PATHSEPSTR + wxString::Format("PHD2_defect_map_%d.txt", profileId);
 }
 
-bool DefectMap::DefectMapExists(int profileId, bool showAlert)
+bool DefectMap::DefectMapExists(int profileId)
 {
-    bool bOk = false;
-
-    if (wxFileExists(DefectMapFileName(profileId)))
-    {
-        wxString fName = DefectMapMasterPath();
-        const wxSize& sensorSize = pCamera->FullSize;
-        if (sensorSize == UNDEFINED_FULL_FRAME_SIZE)
-        {
-            bOk = true;
-        }
-        else
-        {
-            fitsfile *fptr;
-            int status = 0;  // CFITSIO status value MUST be initialized to zero!
-
-            if (PHD_fits_open_diskfile(&fptr, fName, READONLY, &status) == 0)
-            {
-                long fsize[2];
-                fits_get_img_size(fptr, 2, fsize, &status);
-                if (status == 0 && fsize[0] == sensorSize.x && fsize[1] == sensorSize.y)
-                    bOk = true;
-                else if (showAlert)
-                    pFrame->Alert(_("Bad-pixel map does not match the camera in this profile - it needs to be rebuilt."));
-
-                PHD_fits_close_file(fptr);
-            }
-        }
-    }
-
-    return bOk;
+    return wxFileExists(DefectMapFileName(profileId));
 }
 
 void DefectMap::Save(const wxArrayString& info) const

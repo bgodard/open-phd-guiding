@@ -497,7 +497,7 @@ bool SimCamState::ReadNextImage(usImage& img, const wxRect& subframe)
     if (fits_get_hdu_type(fptr, &hdutype, &status) || hdutype != IMAGE_HDU)
     {
         pFrame->Alert(_("FITS file is not of an image"));
-        PHD_fits_close_file(fptr);
+        fits_close_file(fptr, &status);
         return true;
     }
 
@@ -508,7 +508,7 @@ bool SimCamState::ReadNextImage(usImage& img, const wxRect& subframe)
     fits_get_num_hdus(fptr, &nhdus, &status);
     if ((nhdus != 1) || (naxis != 2)) {
         pFrame->Alert(_("Unsupported type or read error loading FITS file"));
-        PHD_fits_close_file(fptr);
+        fits_close_file(fptr, &status);
         return true;
     }
 
@@ -520,7 +520,7 @@ bool SimCamState::ReadNextImage(usImage& img, const wxRect& subframe)
 
     if (img.Init(xsize, ysize)) {
         pFrame->Alert(_("Memory allocation error"));
-        PHD_fits_close_file(fptr);
+        fits_close_file(fptr, &status);
         return true;
     }
 
@@ -539,7 +539,7 @@ bool SimCamState::ReadNextImage(usImage& img, const wxRect& subframe)
     if (fits_read_subset(fptr, TUSHORT, fpixel, lpixel, inc, NULL, buf, NULL, &status))
     {
         pFrame->Alert(_("Error reading data"));
-        PHD_fits_close_file(fptr);
+        fits_close_file(fptr, &status);
         return true;
     }
 
@@ -566,7 +566,7 @@ bool SimCamState::ReadNextImage(usImage& img, const wxRect& subframe)
 
     delete[] buf;
 
-    PHD_fits_close_file(fptr);
+    fits_close_file(fptr, &status);
 
     return false;
 }
@@ -962,7 +962,7 @@ Camera_SimClass::Camera_SimClass()
 {
     Connected = false;
     Name = _T("Simulator");
-    FullSize = wxSize(752,580);
+    FullSize = wxSize(640,480);
     m_hasGuideOutput = true;
     HasShutter = true;
     HasGainControl = true;
@@ -1189,7 +1189,6 @@ bool Camera_SimClass::Capture(int WXUNUSED(duration), usImage& img, bool recon) 
     {
         if (fits_get_hdu_type(fptr, &hdutype, &status) || hdutype != IMAGE_HDU) {
             pFrame->Alert(_("FITS file is not of an image"));
-            PHD_fits_close_file(fptr);
             return true;
         }
 
@@ -1201,20 +1200,17 @@ bool Camera_SimClass::Capture(int WXUNUSED(duration), usImage& img, bool recon) 
         fits_get_num_hdus(fptr,&nhdus,&status);
         if ((nhdus != 1) || (naxis != 2)) {
             pFrame->Alert(wxString::Format(_("Unsupported type or read error loading FITS file %d %d"),nhdus,naxis));
-            PHD_fits_close_file(fptr);
             return true;
         }
         if (img.Init(xsize,ysize)) {
             pFrame->Alert(_("Memory allocation error"));
-            PHD_fits_close_file(fptr);
             return true;
         }
         if (fits_read_pix(fptr, TUSHORT, fpixel, xsize*ysize, NULL, img.ImageData, NULL, &status) ) { // Read image
             pFrame->Alert(_("Error reading data"));
-            PHD_fits_close_file(fptr);
             return true;
         }
-        PHD_fits_close_file(fptr);
+        fits_close_file(fptr,&status);
         frame = frame + step;
         if (frame > 440) {
             step = -1;
